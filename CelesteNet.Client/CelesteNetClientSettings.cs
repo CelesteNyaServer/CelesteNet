@@ -777,7 +777,7 @@ namespace Celeste.Mod.CelesteNet.Client {
                 catch (Exception e)
                 {
                     CelesteNetClientModule.Instance.Context.Status.Set("The login link has been copied to the clipboard, please access the login yourself.", 5f);
-                    System.Windows.Forms.Clipboard.SetText("https://celeste.centralteam.cn/oauth/authorize?client_id=FSygRsIuDy0edjcJzYuw2PpJL1TwkWa&response_type=code&redirect_uri=http://localhost:38038/auth&scope=celeste.read");
+                    TextInput.SetClipboardText("https://celeste.centralteam.cn/oauth/authorize?client_id=FSygRsIuDy0edjcJzYuw2PpJL1TwkWa&response_type=code&redirect_uri=http://localhost:38038/auth&scope=celeste.read");
                     Logger.Log(LogLevel.INF, "celestemodcore", "Login Failed , The login link has been copied to the clipboard, please access the login yourself.");
                 }
             });

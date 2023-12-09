@@ -63,6 +63,7 @@
       <!-- Whoops. -->
       <PropertyGroup>
         <CelesteDir>C:\Program Files (x86)\Steam\steamapps\common\Celeste</CelesteDir>
+        <CelesteDir Condition="Exists('$(CelesteDir)\Celeste.dll')">C:\Program Files (x86)\Steam\steamapps\common\Celeste\legacyRef</CelesteDir>
         <InCelesteModDir>false</InCelesteModDir>
         <CopyCeleste Condition="'$(CopyCeleste)' == ''">!$(IsModule)</CopyCeleste>
       </PropertyGroup>
@@ -74,18 +75,6 @@
   </Target>
 
   <ItemGroup>
-    <PackageReference Include="MonoMod.RuntimeDetour" Version="21.07.22.03">
-      <PrivateAssets Condition="$(InCelesteModDir) And $(IsNetFramework)">all</PrivateAssets>
-      <ExcludeAssets Condition="$(InCelesteModDir) And $(IsNetFramework)">runtime</ExcludeAssets>
-    </PackageReference>
-    <PackageReference Include="MonoMod.Utils" Version="21.07.22.03">
-      <PrivateAssets Condition="$(InCelesteModDir) And $(IsNetFramework)">all</PrivateAssets>
-      <ExcludeAssets Condition="$(InCelesteModDir) And $(IsNetFramework)">runtime</ExcludeAssets>
-    </PackageReference>
-    <PackageReference Include="YamlDotNet" Version="8.1.2">
-      <PrivateAssets Condition="$(InCelesteModDir) And $(IsNetFramework)">all</PrivateAssets>
-      <ExcludeAssets Condition="$(InCelesteModDir) And $(IsNetFramework)">runtime</ExcludeAssets>
-    </PackageReference>
     <!-- .NET Framework 4.0+ reference assemblies aren't always available system-wide. -->
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.*">
       <PrivateAssets>all</PrivateAssets>
@@ -94,9 +83,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Celeste" HintPath="$(CelesteDir)\Celeste.exe" Private="$(CopyCeleste)" />
-    <Reference Include="MMHOOK_Celeste" HintPath="$(CelesteDir)\MMHOOK_Celeste.dll" Private="$(CopyCeleste)" />
-    <Reference Include="Stearmworks.NET.dll" HintPath="..\lib\Steamworks.NET.dll" Private="$(CopyCeleste)" />
+    <Reference Include="Celeste" HintPath="$(CelesteDir)\Celeste.exe" Private="$(CopyCeleste)"/>
+    <Reference Include="MMHOOK_Celeste" HintPath="$(CelesteDir)\MMHOOK_Celeste.dll" Private="$(CopyCeleste)"/>
+    <Reference Include="Stearmworks.NET.dll" HintPath="..\lib\Steamworks.NET.dll" Private="$(CopyCeleste)"/>
+    <Reference Include="MonoMod.RuntimeDetour" HintPath="$(CelesteDir)\MonoMod.RuntimeDetour.dll" Private="$(CopyCeleste)"/>
+    <Reference Include="MonoMod.Utils" HintPath="$(CelesteDir)\MonoMod.Utils.dll" Private="$(CopyCeleste)"/>
+    <Reference Include="YamlDotNet" HintPath="$(CelesteDir)\YamlDotNet.dll" Private="$(CopyCeleste)"/>
+    <Reference Include="Mono.Cecil" HintPath="$(CelesteDir)\Mono.Cecil.dll" Private="$(CopyCeleste)"/>
   </ItemGroup>
 
   <Choose>
