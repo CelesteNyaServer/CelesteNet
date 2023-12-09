@@ -204,8 +204,8 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
 
                     _RepeatIndex = 0;
                     _Time = 0;
-                    TextInput.OnInput += OnTextInput;
-
+                    TextInputEXT.StartTextInput();
+                    TextInputEXT.TextInput += OnTextInput;
                     UpdateScrollPromptControls();
                     CompletionHidden = CompletionHiddenBy.None;
                 } else {
@@ -216,7 +216,8 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                     _ConsumeInput = 2;
                     if (Engine.Scene is Level level && level.Overlay == _DummyOverlay)
                         level.Overlay = null;
-                    TextInput.OnInput -= OnTextInput;
+                    TextInputEXT.TextInput -= OnTextInput;
+                    TextInputEXT.StopTextInput();
                 }
 
                 _Active = value;
@@ -653,7 +654,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                     UpdateCompletion(CompletionType.None);
                 }
                 CompletionHidden = CompletionHiddenBy.None;
-            } else if (!char.IsControl(c) && CelesteNetUtils.EnglishFontCharsSet.Contains(c)) {
+            } else if (!char.IsControl(c)) {
                 if (CursorIndex == Typing.Length) {
                     // Any other character - append.
                     Typing += c;
