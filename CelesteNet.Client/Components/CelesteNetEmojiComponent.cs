@@ -1,20 +1,15 @@
-﻿using Celeste.Mod.CelesteNet.Client.Entities;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using Celeste.Mod.CelesteNet.DataTypes;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
 using Monocle;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using MDraw = Monocle.Draw;
 
 namespace Celeste.Mod.CelesteNet.Client.Components {
     public class CelesteNetEmojiComponent : CelesteNetGameComponent {
+
+        public const string AvatarMissing = ":celestenet_avatar_missing:";
 
         public class NetEmojiContent : ModContent {
 
@@ -46,7 +41,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 Type = typeof(Texture2D);
                 Format = "png";
                 PathVirtual = $"emoji/{ID}";
-                MainThreadHelper.Do(() => {
+                MainThreadHelper.Schedule(() => {
                     Emoji.Register(ID, GFX.Misc["whiteCube"]);
                     Emoji.Fill(CelesteNetClientFont.Font);
                 });
@@ -55,7 +50,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             public void Dispose() {
                 Buffer.Dispose();
                 if (!Pending) {
-                    MainThreadHelper.Do(() => {
+                    MainThreadHelper.Schedule(() => {
                         Emoji.Register(ID, GFX.Misc["whiteCube"]);
                         Emoji.Fill(CelesteNetClientFont.Font);
                     });
@@ -117,7 +112,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
 
                     // Register the emoji
                     try {
-                        MainThreadHelper.Do(() => {
+                        MainThreadHelper.Schedule(() => {
                             VirtualTexture vtex;
                             try {
                                 vtex = VirtualContent.CreateTexture(asset);
@@ -129,12 +124,34 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                             Content.Registered.Add(asset.ID);
                             Emoji.Register(asset.ID, tex);
                             Emoji.Fill(CelesteNetClientFont.Font);
+
+                            // find the corresponding DataPlayerInfo (perhaps DataNetEmoji should hold a Ref)
+                            string[] splitID = netemoji.ID.Split('_');
+                            if (splitID.Length > 2 && uint.TryParse(splitID[2], out uint ID)
+                            && Client?.Data != null && Client.Data.TryGetRef(ID, out DataPlayerInfo player) && player != null) {
+                                // restore the avatar in case it has been set to AvatarMissing by the Filter below
+                                player.DisplayName = player.DisplayName.Replace(AvatarMissing, $":{netemoji.ID}:");
+                                player.UpdateDisplayName(!Client.Options.AvatarsDisabled);
+                            }
                         });
                     } catch (ObjectDisposedException) {
                         // Main thread died and queue closed, whoops.
                     }
                 }
             }
+        }
+
+        public bool Filter(CelesteNetConnection con, DataPlayerInfo info) {
+            if (info == null || Client?.Options == null || Client.Options.AvatarsDisabled)
+                return true;
+
+            // catch missing avatars - "restoring" these happens in Handle above when the avatar is fully received
+            string avatar = $"celestenet_avatar_{info.ID}_";
+            if (!Emoji.Registered.Contains(avatar)) {
+                info.DisplayName = info.DisplayName.Replace($":{avatar}:", AvatarMissing);
+                info.UpdateDisplayName(true);
+            }
+            return true;
         }
 
         protected override void Dispose(bool disposing) {

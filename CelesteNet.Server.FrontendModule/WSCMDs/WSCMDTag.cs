@@ -1,13 +1,3 @@
-using Mono.Cecil;
-using Mono.Cecil.Cil;
-using MonoMod.Utils;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace Celeste.Mod.CelesteNet.Server.Control {
     public class WSCMDTagAdd : WSCMD {
         public override bool MustAuth => true;
@@ -20,6 +10,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                 return false;
             info.Tags.Add(tag);
             Frontend.Server.UserData.Save(uid, info);
+            Frontend.TaggedUsers.Add(uid, info);
             if (tag == BasicUserInfo.TAG_AUTH || tag == BasicUserInfo.TAG_AUTH_EXEC)
                 Frontend.Server.UserData.Create(uid, true);
             return true;
@@ -37,6 +28,8 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                 return false;
             info.Tags.Remove(tag);
             Frontend.Server.UserData.Save(uid, info);
+            if (info.Tags.Count == 0)
+                Frontend.TaggedUsers.Remove(uid);
             return true;
         }
     }

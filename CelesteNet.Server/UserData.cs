@@ -1,15 +1,6 @@
-﻿using Celeste.Mod.CelesteNet.DataTypes;
-using Mono.Options;
-using MonoMod.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Celeste.Mod.CelesteNet.Server {
     public abstract class UserData : IDisposable {
@@ -38,8 +29,8 @@ namespace Celeste.Mod.CelesteNet.Server {
         public abstract void DeleteFile(string uid, string name);
         public abstract void Wipe(string uid);
 
-        public abstract T[] LoadRegistered<T>() where T : new();
-        public abstract T[] LoadAll<T>() where T : new();
+        public abstract Dictionary<string, T> LoadRegistered<T>() where T : new();
+        public abstract Dictionary<string, T> LoadAll<T>() where T : new();
 
         public abstract string[] GetRegistered();
         public abstract string[] GetAll();

@@ -1,13 +1,5 @@
-﻿using Microsoft.Xna.Framework;
-using Monocle;
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System;
+using Microsoft.Xna.Framework;
 
 namespace Celeste.Mod.CelesteNet.DataTypes {
     public class DataChat : DataType<DataChat> {
@@ -29,9 +21,33 @@ namespace Celeste.Mod.CelesteNet.DataTypes {
         /// <summary>
         /// Server-internal field.
         /// </summary>
+        [Obsolete("Use TryGetSingleTarget instead of this getter, do `Targets = [value]` instead of this setter.", false)]
         public DataPlayerInfo? Target {
-            get => Targets != null && Targets.Length == 1 ? Targets[0] : null;
-            set => Targets = value == null ? null : new DataPlayerInfo[] { value };
+            get {
+                if (Targets != null && Targets.Length == 1) {
+                    return Targets[0];
+                } else {
+                    return null;
+                }
+            }
+
+            set {
+                if (value == null) {
+                    Targets = null;
+                } else {
+                    Targets = new DataPlayerInfo[] { value };
+                }
+            }
+        }
+
+        public bool TryGetSingleTarget(out DataPlayerInfo? target) {
+            if (Targets != null && Targets.Length == 1) {
+                target = Targets[0];
+                return true;
+            }
+
+            target = null;
+            return false;
         }
 
         public DataPlayerInfo? Player;
@@ -83,9 +99,29 @@ namespace Celeste.Mod.CelesteNet.DataTypes {
         public override string ToString()
             => ToString(true, false);
 
-        public string ToString(bool displayName, bool id)
-            => $"{(id ? $"{{{ID}v{Version}}} " : "")}{(Tag.IsNullOrEmpty() ? "" : $"[{Tag}] ")}{(displayName ? Player?.DisplayName : Player?.FullName) ?? "**SERVER**"}{(Target != null ? " @ " + Target.DisplayName : "")}:{(Text.IndexOf('\n') != -1 ? "\n" : " ")}{Text}";
 
+        public string ToString(bool useDisplayName, bool withID) {
+            string id = "";
+            if (withID)
+                id = $"{{{ID}v{Version}}}";
 
+            string tag = "";
+            if (!Tag.IsNullOrEmpty())
+                tag = $"[{Tag}]";
+
+            string? username = useDisplayName ? Player?.DisplayName : Player?.FullName;
+            username ??= "**SERVER**";
+
+            if (TryGetSingleTarget(out DataPlayerInfo? target) && target != null)
+                username += " @ " + (useDisplayName ? target.DisplayName : target.FullName);
+
+            string prefix = $"{id} {tag} {username}:".TrimStart();
+
+            if (!Text.Contains('\n')) {
+                return $"{prefix} {Text}";
+            } else {
+                return $"{prefix}\n{Text}";
+            }
+        }
     }
 }

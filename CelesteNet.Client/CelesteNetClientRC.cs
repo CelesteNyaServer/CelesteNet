@@ -1,5 +1,4 @@
-﻿using MonoMod.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -31,12 +30,9 @@ namespace Celeste.Mod.CelesteNet.Client
                 // Port MUST be fixed as the website expects it to be the same for everyone.
                 Listener.Prefixes.Add($"http://localhost:{CelesteNetUtils.ClientRCPort}/");
                 Listener.Start();
-            }
-            catch (Exception e)
-            {
-                e.LogDetailed();
-                try
-                {
+            } catch (Exception e) {
+                Logger.LogDetailedException(e);
+                try {
                     Listener?.Stop();
                 }
                 catch { }
@@ -55,6 +51,7 @@ namespace Celeste.Mod.CelesteNet.Client
         {
             Listener?.Abort();
             tokenSource.Cancel();
+            //ListenerThread?.Abort();
             Listener = null;
             ListenerThread = null;
         }
@@ -334,8 +331,8 @@ header {
                             try
                             {
                                 string clientId = "DEV";
-                                string clientSecret ="DEV";
-                                var result =  HttpUtils.Post("https://celeste.centralteam.cn/oauth/token","\r\n{\"client_id\":\""+clientId+"\",\r\n\"client_secret\":\""+clientSecret+"\",\r\n\"grant_type\":\"authorization_code\",\r\n\"code\":\""+name+"\",\r\n\"redirect_uri\":\"http://localhost:38038/auth\"\r\n}\r\n");
+                                string clientSecret = "DEV";
+                                var result = HttpUtils.Post("https://celeste.centralteam.cn/oauth/token","\r\n{\"client_id\":\""+clientId+"\",\r\n\"client_secret\":\""+clientSecret+"\",\r\n\"grant_type\":\"authorization_code\",\r\n\"code\":\""+name+"\",\r\n\"redirect_uri\":\"http://localhost:38038/auth\"\r\n}\r\n");
                                 dynamic json = JsonConvert.DeserializeObject(result);
                                 CelesteNetClientModule.Settings.Key = json.access_token;
                                 CelesteNetClientModule.Settings.RefreshToken = json.refresh_token;

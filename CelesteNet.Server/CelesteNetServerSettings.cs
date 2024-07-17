@@ -1,13 +1,4 @@
-﻿using Microsoft.Xna.Framework;
-using Mono.Options;
-using Monocle;
-using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Newtonsoft.Json;
 using YamlDotNet.Serialization;
 
 namespace Celeste.Mod.CelesteNet.Server {
@@ -54,6 +45,8 @@ namespace Celeste.Mod.CelesteNet.Server {
         public int MaxHeartbeatDelay { get; set; } = 20;
         public float HeartbeatInterval { get; set; } = 250f;
         public float PingRequestInterval { get; set; } = 1500f;
+        public float AvatarQueueInterval { get; set; } = 250f;
+        public int AvatarQueueBatchCount { get; set; } = 10;
 
         public string PacketDumperDirectory { get; set; } = "packetDump";
         public int PacketDumperMaxDumps { get; set; } = 64;
@@ -93,11 +86,15 @@ namespace Celeste.Mod.CelesteNet.Server {
 
         public bool AuthOnly { get; set; } = false;
 
+        public bool ClientChecks { get; set; } = false;
+
         public string MessageDiscontinue { get; set; } = "";
         public string MessageTeapotVersionMismatch { get; set; } = "Teapot version mismatch";
         public string MessageAuthOnly { get; set; } = "Server supports only authenticated clients";
+        public string MessageClientCheckFailed { get; set; } = "Client check has failed";
         public string MessageInvalidKey { get; set; } = "Invalid key";
         public string MessageBan { get; set; } = "Banned: {2}";
+        
 
     }
 }
