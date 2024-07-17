@@ -242,7 +242,7 @@ Connection: close
 $@"HTTP/1.1 403 Access Denied
 Connection: close
 
-Client version {clientVersion} is outdated. Please update to {expectedVersion}."
+{string.Format(Server.Settings.MessageOutdatedVersion, clientVersion, expectedVersion)}"
 .Trim().Replace("\r\n", "\n").Replace("\n", "\r\n")
 );
                     return null;
@@ -271,7 +271,7 @@ Client version {clientVersion} is outdated. Please update to {expectedVersion}."
                 if (playerUID == null)
                     errorReason ??= "No UID";
                 if (playerName == null)
-                    errorReason ??= "No name";
+                    errorReason ??= "No name, please login first.";
                 if (avaterPhotoUrl == null)
                     avaterPhotoUrl = "https://celeste.centralteam.cn/assets/uploads/profile/default.jpg";
                 if (errorReason != null || playerUID == null || playerName == null) {

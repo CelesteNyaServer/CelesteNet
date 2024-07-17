@@ -94,7 +94,7 @@ namespace Celeste.Mod.CelesteNet.Server {
         public string MessageClientCheckFailed { get; set; } = "Client check has failed";
         public string MessageInvalidKey { get; set; } = "Invalid key";
         public string MessageBan { get; set; } = "Banned: {2}";
-        
+        public string MessageOutdatedVersion { get; set; } = "Client version {0} is outdated. Please update to {1}.";
 
     }
 }

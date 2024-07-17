@@ -30,9 +30,12 @@ namespace Celeste.Mod.CelesteNet.Client
                 // Port MUST be fixed as the website expects it to be the same for everyone.
                 Listener.Prefixes.Add($"http://localhost:{CelesteNetUtils.ClientRCPort}/");
                 Listener.Start();
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 Logger.LogDetailedException(e);
-                try {
+                try
+                {
                     Listener?.Stop();
                 }
                 catch { }
@@ -318,8 +321,9 @@ header {
                     Name = "AuthCode",
                     InfoHTML = "Set Auth Code to Get Token",
                     Handle = c => {
+                        StringBuilder builder = new(256);
+                        WriteHTMLStart(c, builder);
                         NameValueCollection data = ParseQueryString(c.Request.RawUrl.Replace("#","?"));
-                        Console.WriteLine(data);
                         if (data.AllKeys.Contains("code"))
                         {
                             string name = data["code"].Trim();
@@ -341,12 +345,19 @@ header {
                                 CelesteNetClientModule.Settings.ExpiredTime = (timeStamp + (int)json.expires_in).ToString();
                                 CelesteNetClientModule.Instance.SaveSettings();
                                 CelesteNetClientModule.Settings.Connected = true;
-                                Write(c, "Login Success,Please Closed this Page.");
-                            }catch(Exception e){
-                                Write(c, "Login Failed,Please Retry. Log:\n"+e.ToString());
+                                builder.AppendLine("<h3>Login successfully, please close this page.</h3>");
+                            } catch (Exception e) {
+                                builder.AppendLine("<h3>Login failed, please retry or report this error.</h3>");
+                                builder.AppendLine("<hr/>");
+                                builder.AppendLine("<p>Detailed exception:\n</p>");
+                                builder.Append("<ul><li><pre>");
+                                builder.Append(e.ToString().ReplaceLineEndings("</pre></li><li><pre>"));
+                                builder.AppendLine("</pre></li>");
+                                builder.AppendLine("</ul>");
                             }
                         }
-
+                        WriteHTMLEnd(c, builder);
+                        Write(c, builder.ToString());
                     }
                 }
             };
