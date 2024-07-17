@@ -1,22 +1,17 @@
-﻿#if NETCORE
-using Microsoft.AspNetCore.StaticFiles;
-#endif
-using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using System.Web;
-using WebSocketSharp.Server;
-using Celeste.Mod.Helpers;
+using System.Timers;
 using Celeste.Mod.CelesteNet.DataTypes;
 using Celeste.Mod.CelesteNet.Server.Chat;
-using System.Timers;
+using Microsoft.AspNetCore.StaticFiles;
+using Newtonsoft.Json;
+using WebSocketSharp.Server;
 
 namespace Celeste.Mod.CelesteNet.Server.Control {
     public class Frontend : CelesteNetServerModule<FrontendSettings> {
@@ -29,6 +24,8 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
         public readonly HashSet<string> CurrentSessionKeys = new();
         public readonly HashSet<string> CurrentSessionExecKeys = new();
 
+        public readonly Dictionary<string, BasicUserInfo> TaggedUsers = new();
+
         private HttpServer? HTTPServer;
         private WebSocketServiceHost? WSHost;
 
@@ -36,9 +33,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
         private readonly Dictionary<string, long> WSUpdateCooldowns = new();
         public static readonly long WSUpdateCooldownTime = 1000;
 
-#if NETCORE
         private readonly FileExtensionContentTypeProvider ContentTypeProvider = new();
-#endif
 
         public JsonSerializer Serializer = new() {
             Formatting = Formatting.Indented
@@ -73,6 +68,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
 
             ChatModule chat = Server.Get<ChatModule>();
             chat.OnReceive += OnChatReceive;
+            chat.OnApplyFilter += OnChatFilter;
             chat.OnForceSend += OnForceSend;
         }
 
@@ -96,6 +92,10 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             StatsTimer.AutoReset = true;
             StatsTimer.Elapsed += (_, _) => RCEndpoints.UpdateStats(Server);
             StatsTimer.Enabled = true;
+
+            foreach (var kvp in RefreshTaggedUserInfos()) {
+                Logger.Log(LogLevel.VVV, "frontend", $"Found tagged user: {kvp.Key} - {kvp.Value.Name} = {string.Join(", ", kvp.Value.Tags)}");
+            }
         }
 
         public override void Dispose() {
@@ -125,6 +125,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
 
             if (Server.TryGet(out ChatModule? chat)) {
                 chat.OnReceive -= OnChatReceive;
+                chat.OnApplyFilter -= OnChatFilter;
                 chat.OnForceSend -= OnForceSend;
             }
         }
@@ -134,6 +135,8 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
         }
 
         private void OnSessionStart(CelesteNetPlayerSession session) {
+            if (!session.Alive)
+                return;
             Broadcast(frontendWS => frontendWS.SendCommand(
                 "sess_join", PlayerSessionToFrontend(session, frontendWS.IsAuthorized, true)
             ));
@@ -194,56 +197,126 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             BroadcastCMD(msg.Targets != null, "chat", msg.ToDetailedFrontendChat());
         }
 
+        private void OnChatFilter(ChatModule chat, FilterDecision chatFilterDecision) {
+            BroadcastCMD(true, "filter", new {
+                // bit annoying but I'd rather have the enum values as strings in the JSON rather than ints
+                Handling = chatFilterDecision.Handling.ToString(),
+                Cause = chatFilterDecision.Cause.ToString(),
+
+                PlayerID = chatFilterDecision.playerID,
+                Name = chatFilterDecision.playerName,
+
+                MsgID = chatFilterDecision.chatID,
+                Text = chatFilterDecision.chatText,
+                Tag = chatFilterDecision.chatTag
+            });
+        }
+
         private void OnForceSend(ChatModule chat, DataChat msg) {
             BroadcastCMD(msg.Targets != null, "chat", msg.ToDetailedFrontendChat());
         }
 
-        public object PlayerSessionToFrontend(CelesteNetPlayerSession p, bool auth = false, bool shorten = false) {
-            // This sucks c:
-            return shorten ? new {
-                ID = p.SessionID,
-                UID = auth ? p.UID : null,
-                p.PlayerInfo?.Name,
-                p.PlayerInfo?.FullName,
-                p.PlayerInfo?.DisplayName,
-                Avatar = Server.UserData.HasFile(p.UID, "avatar.png") ? $"{Settings.APIPrefix}/avatar?uid={p.UID}" : null,
+        public Dictionary<string, BasicUserInfo> RefreshTaggedUserInfos() {
+            Logger.Log(LogLevel.VVV, "frontend", "RefreshTaggedUserInfos: ");
 
-                Connection = auth ? p.Con.ID : null,
-                ConnectionUID = auth ? p.Con.UID : null
+            string[] uids = Server.UserData.GetAll();
+
+            Logger.Log(LogLevel.VVV, "frontend", "RefreshTaggedUserInfos: Got UIDs");
+            TaggedUsers.Clear();
+            foreach(string uid in uids) {
+                BasicUserInfo info = Server.UserData.Load<BasicUserInfo>(uid);
+
+                if (!info.Tags.Any())
+                    continue;
+
+                TaggedUsers.Add(uid, info);
             }
-            : new {
-                ID = p.SessionID,
-                UID = auth ? p.UID : null,
-                p.PlayerInfo?.Name,
-                p.PlayerInfo?.FullName,
-                p.PlayerInfo?.DisplayName,
-                Avatar = Server.UserData.HasFile(p.UID, "avatar.png") ? $"{Settings.APIPrefix}/avatar?uid={p.UID}" : null,
+            Logger.Log(LogLevel.VVV, "frontend", "RefreshTaggedUserInfos: Got BasicUserInfos");
 
-                Connection = auth ? p.Con.ID : null,
-                ConnectionUID = auth ? p.Con.UID : null,
+            return TaggedUsers;
+        }
 
-                TCPPingMs = auth ? (p.Con as ConPlusTCPUDPConnection)?.TCPPingMs : null,
-                UDPPingMs = auth ? (p.Con as ConPlusTCPUDPConnection)?.UDPPingMs : null,
+        public object PlayerSessionToFrontend(CelesteNetPlayerSession p, bool auth = false, bool shorten = false) {
+            
+            dynamic player = new ExpandoObject();
 
-                TCPDownlinkBpS = auth ? (p.Con as ConPlusTCPUDPConnection)?.TCPRecvRate.ByteRate : null,
-                TCPDownlinkPpS = auth ? (p.Con as ConPlusTCPUDPConnection)?.TCPRecvRate.PacketRate : null,
-                TCPUplinkBpS = auth ? (p.Con as ConPlusTCPUDPConnection)?.TCPSendRate.ByteRate : null,
-                TCPUplinkPpS = auth ? (p.Con as ConPlusTCPUDPConnection)?.TCPSendRate.PacketRate : null,
-                UDPDownlinkBpS = auth ? (p.Con as ConPlusTCPUDPConnection)?.UDPRecvRate.ByteRate : null,
-                UDPDownlinkPpS = auth ? (p.Con as ConPlusTCPUDPConnection)?.UDPRecvRate.PacketRate : null,
-                UDPUplinkBpS = auth ? (p.Con as ConPlusTCPUDPConnection)?.UDPSendRate.ByteRate : null,
-                UDPUplinkPpS = auth ? (p.Con as ConPlusTCPUDPConnection)?.UDPSendRate.PacketRate : null,
-            };
+            player.ID = p.SessionID;
+            player.Name = p.PlayerInfo?.Name;
+            player.FullName = p.PlayerInfo?.FullName;
+            player.DisplayName = p.PlayerInfo?.DisplayName;
+            if (Server.UserData.HasFile(p.UID, "avatar.png"))
+                player.Avatar =  $"{Settings.APIPrefix}/avatar?uid={p.UID}";
+
+            if (auth) {
+                player.UID = p.UID;
+                player.Connection = p.Con.ID;
+                player.ConnectionUID = p.Con.UID;
+                player.DisplayName = p.PlayerInfo?.DisplayName;
+            }
+
+            ConPlusTCPUDPConnection? pCon = p.Con as ConPlusTCPUDPConnection;
+
+            if (!shorten && auth) {
+                player.TCPPingMs = pCon?.TCPPingMs;
+                player.UDPPingMs = pCon?.UDPPingMs;
+                player.TCPDownlinkBpS = pCon?.TCPRecvRate.ByteRate;
+                player.TCPDownlinkPpS = pCon?.TCPRecvRate.PacketRate;
+                player.TCPUplinkBpS = pCon?.TCPSendRate.ByteRate;
+                player.TCPUplinkPpS = pCon?.TCPSendRate.PacketRate;
+                player.UDPDownlinkBpS = pCon?.UDPRecvRate.ByteRate;
+                player.UDPDownlinkPpS = pCon?.UDPRecvRate.PacketRate;
+                player.UDPUplinkBpS = pCon?.UDPSendRate.ByteRate;
+                player.UDPUplinkPpS = pCon?.UDPSendRate.PacketRate;
+            }
+
+            if (pCon?.ConnFeatureData.Count > 0) {
+                /*
+                var x = (IDictionary<string, object>)player;
+                foreach (var kvp in pCon.ConnFeatureData) {
+                    x[kvp.Key] = kvp.Value;
+                }
+                */
+                player.ConnInfo = new Dictionary<string, string>(pCon.ConnFeatureData);
+            }
+
+            return player;
+        }
+
+        public object UserInfoToFrontend(string uid, BasicUserInfo info, BanInfo? ban = null, KickHistory? kicks = null, bool authExec = false) {
+
+            dynamic user = new ExpandoObject();
+
+            user.UID = uid;
+            user.Name = info.Name;
+            user.Discrim = info.Discrim;
+            user.Tags = info.Tags;
+            user.Key = (!authExec && info.Tags.Contains(BasicUserInfo.TAG_AUTH)) || info.Tags.Contains(BasicUserInfo.TAG_AUTH_EXEC) ? null : Server.UserData.GetKey(uid);
+
+            user.Ban = null;
+            if (ban != null && !ban.Reason.IsNullOrEmpty()) {
+                user.Ban = new {
+                    ban.Name,
+                    ban.Reason,
+                    From = ban.From?.ToUnixTimeMillis() ?? 0,
+                    To = ban.To?.ToUnixTimeMillis() ?? 0
+                };
+            }
+
+            user.Kicks = null;
+            if (kicks != null) {
+                user.Kicks = kicks.Log.Select(e => new {
+                    e.Reason,
+                    From = e.From?.ToUnixTimeMillis() ?? 0
+                }).ToArray();
+            }
+
+            return user;
         }
 
         private string? GetContentType(string path) {
-#if NETCORE
-            if (ContentTypeProvider.TryGetContentType(path, out string contentType))
-                return contentType;
-            return null;
-#else
-            return MimeMapping.GetMimeMapping(path);
-#endif
+            return ContentTypeProvider.TryGetContentType(path, out string contentType)
+                ? contentType
+                : null;
         }
 
         public Stream? OpenContent(string path, out string pathNew, out DateTime? lastMod, out string? contentType) {
@@ -495,7 +568,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             using (StreamWriter sw = new(ms, CelesteNetUtils.UTF8NoBOM, 1024, true))
             using (JsonTextWriter jtw = new(sw))
                 Serializer.Serialize(jtw, obj);
-
+            
             ms.Seek(0, SeekOrigin.Begin);
 
             c.Response.ContentType = "application/json";

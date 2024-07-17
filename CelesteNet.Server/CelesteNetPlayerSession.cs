@@ -40,9 +40,9 @@ namespace Celeste.Mod.CelesteNet.Server {
         };
 
 
-        private string playerColor;
-        private string playerPrefix;
-        private string avaterPhotoUrl;
+        private readonly string playerColor;
+        private readonly string playerPrefix;
+        private readonly string avaterPhotoUrl;
 
         public readonly CelesteNetServer Server;
         public readonly CelesteNetConnection Con;
@@ -64,12 +64,14 @@ namespace Celeste.Mod.CelesteNet.Server {
 
         public DataInternalBlob[] AvatarFragments = Dummy<DataInternalBlob>.EmptyArray;
 
+        public HashSet<CelesteNetPlayerSession> AvatarSendQueue = new HashSet<CelesteNetPlayerSession>();
+
         private readonly object RequestNextIDLock = new();
         private uint RequestNextID = 0;
 
         private DataNetFilterList? FilterList = null;
 
-        internal CelesteNetPlayerSession(CelesteNetServer server, CelesteNetConnection con, uint sesId, string uid, string name, CelesteNetClientOptions clientOptions,string playerColor,string avaterPhotoUrl,string playerPrefix) {
+        internal CelesteNetPlayerSession(CelesteNetServer server, CelesteNetConnection con, uint sesId, string uid, string name, CelesteNetClientOptions clientOptions, string playerColor, string avaterPhotoUrl, string playerPrefix) {
             Server = server;
             Con = con;
             SessionID = sesId;
@@ -92,6 +94,11 @@ namespace Celeste.Mod.CelesteNet.Server {
         }
 
         public T? Get<T>(object ctx) where T : class {
+            if (!Alive) {
+                Logger.Log(LogLevel.INF, "playersession", $"Early return on attempt to 'Get<{typeof(T)}>' when session is already !Alive");
+                return null;
+            }
+
             using (StateLock.R()) {
                 if (!StateContexts.TryGetValue(ctx, out Dictionary<Type, object>? states))
                     return null;
@@ -108,6 +115,11 @@ namespace Celeste.Mod.CelesteNet.Server {
             if (state == null)
                 return Remove<T>(ctx);
 
+            if (!Alive) {
+                Logger.Log(LogLevel.INF, "playersession", $"Early return on attempt to 'Set<{typeof(T)}>' when session is already !Alive");
+                return state;
+            }
+
             using (StateLock.W()) {
                 if (!StateContexts.TryGetValue(ctx, out Dictionary<Type, object>? states))
                     StateContexts[ctx] = states = new();
@@ -118,6 +130,11 @@ namespace Celeste.Mod.CelesteNet.Server {
         }
 
         public T? Remove<T>(object ctx) where T : class {
+            if (!Alive) {
+                Logger.Log(LogLevel.INF, "playersession", $"Early return on attempt to 'Remove<{typeof(T)}>' when session is already !Alive");
+                return null;
+            }
+
             using (StateLock.W()) {
                 if (!StateContexts.TryGetValue(ctx, out Dictionary<Type, object>? states))
                     return null;
@@ -136,10 +153,23 @@ namespace Celeste.Mod.CelesteNet.Server {
             Logger.Log(LogLevel.INF, "playersession", $"Startup #{SessionID} {Con} (Session UID: {UID}; Connection UID: {Con.UID})");
             Logger.Log(LogLevel.VVV, "playersession", $"Startup #{SessionID} @ {DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond} - Startup");
 
+            string? clientDisconnectReason = null;
+            if (Server.Settings.ClientChecks && Con is ConPlusTCPUDPConnection cpCon)
+                clientDisconnectReason = ConnFeatureUtils.ClientCheck(cpCon);
+
+            if (clientDisconnectReason != null) {
+                Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} disconnecting because ClientCheck returned: '{clientDisconnectReason}'");
+                Con.Send(new DataDisconnectReason { Text = clientDisconnectReason });
+                Con.Send(new DataInternalDisconnect());
+                Dispose();
+                return;
+            }
+
             // Resolver player name conflicts
-            string nameSpace = Name;
-            string fullNameSpace = nameSpace;
-            string fullName = Name.Replace(" ", "");
+            string fullName = Name;
+
+            // 群服的名称不会有空格
+            //string fullNameWithoutSpace = Name.Replace(" ", "");
 
             // This only checks against same clientID, not instanceID at the moment
             // i.e. currently you can only have one connection per installation, not per individual running instance...
@@ -173,21 +203,24 @@ namespace Celeste.Mod.CelesteNet.Server {
                     if (!conflict)
                         break;
                     i++;
-                    fullNameSpace = $"{nameSpace}#{i}";
                     fullName = $"{Name}#{i}";
                 }
             }
-            // Handle avatars
-            string displayName = fullNameSpace;
-            if (!String.IsNullOrEmpty(playerPrefix))
-                fullNameSpace = $"[{playerPrefix}]{displayName}";
-            string img = HttpUtils.GetImage(avaterPhotoUrl,fullNameSpace);
+
+            // Handle avatars (+ carb day)
+            string img;
+            if (DateTime.Now is { Day: 1, Month: 4 } && File.Exists("crab.png"))
+                img = "carb.png";
+            else
+                img = HttpUtils.GetImage(avaterPhotoUrl, fullName);
+            // TODO 官服这里用的是 Server.UserData.ReadFile(UID, "avatar.png")
+            // 这里每次玩家加入都要重发头像请求, 而且缩放在客户端(相对于论坛)侧做, 可以优化这部分流量
+            // 是否可以通过缓存 + 附带版本优化?
+            string avatarId = $"celestenet_avatar_{SessionID}_";
             using (Stream? avatarStream = File.OpenRead(img))
             {
                 if (avatarStream != null)
                 {
-                    string avatarId = $"celestenet_avatar_{SessionID}_";
-                    displayName = $":{avatarId}: {fullNameSpace}";
 
                     // Split the avatar into fragments
                     List<DataNetEmoji> avatarFrags = new();
@@ -220,9 +253,11 @@ namespace Celeste.Mod.CelesteNet.Server {
                 ID = SessionID,
                 Name = Name,
                 FullName = fullName,
-                DisplayName = displayName,
+                AvatarID = avatarId,
+                Prefix = playerPrefix,
                 NameColor = Calc.HexToColor(playerColor)
             };
+            playerInfo.UpdateDisplayName(!ClientOptions.AvatarsDisabled);
             playerInfo.Meta = playerInfo.GenerateMeta(Server.Data);
             Server.Data.SetRef(playerInfo);
 
@@ -235,8 +270,9 @@ namespace Celeste.Mod.CelesteNet.Server {
             Con.Send(playerInfo);
             Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} - Sent own PlayerInfo");
 
-            foreach (DataInternalBlob fragBlob in AvatarFragments)
-                Con.Send(fragBlob);
+            if (!ClientOptions.AvatarsDisabled)
+                foreach (DataInternalBlob fragBlob in AvatarFragments)
+                    Con.Send(fragBlob);
             Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} - Sent own Avatar frags");
 
             int blobSendsNew = 0, avaSendsNew = 0;
@@ -253,19 +289,19 @@ namespace Celeste.Mod.CelesteNet.Server {
 
                     other.Con.Send(blobPlayerInfo);
                     blobSendsOut++;
-                    foreach (DataInternalBlob fragBlob in AvatarFragments) {
-                        other.Con.Send(fragBlob);
-                        avaSendsOut++;
+
+                    if (!other.ClientOptions.AvatarsDisabled) {
+                        foreach (DataInternalBlob fragBlob in AvatarFragments) {
+                            other.Con.Send(fragBlob);
+                            avaSendsOut++;
+                        }
                     }
 
                     Con.Send(otherInfo);
                     blobSendsNew++;
-                    if (!ClientOptions.AvatarsDisabled) {
-                        foreach (DataInternalBlob fragBlob in other.AvatarFragments) {
-                            Con.Send(fragBlob);
-                            avaSendsNew++;
-                        }
-                    }
+
+                    if (!ClientOptions.AvatarsDisabled)
+                        AvatarSendQueue.Add(other);
                 }
 
             Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} - Done using ConLock -- blobSendsNew/avaSendsNew {blobSendsNew}/{avaSendsNew} - blobSendsOut/avaSendsOut {blobSendsOut}/{avaSendsOut} - boundSends {boundSends}");
@@ -273,9 +309,10 @@ namespace Celeste.Mod.CelesteNet.Server {
             if (!Server.Channels.SessionStartupMove(this))
                 ResendPlayerStates();
 
-            Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} ClientGUID: {ClientOptions.ClientID} InstanceID: {ClientOptions.InstanceID}");
+            Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} ClientID: {ClientOptions.ClientID} InstanceID: {ClientOptions.InstanceID}");
             Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} @ {DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond} - Sending DataReady");
             Con.Send(new DataReady());
+
         }
 
         public Action WaitFor<T>(DataFilter<T> cb) where T : DataType<T>
@@ -443,6 +480,7 @@ namespace Celeste.Mod.CelesteNet.Server {
             updated.Name = old.Name;
             updated.FullName = old.FullName;
             updated.DisplayName = old.DisplayName;
+            updated.UpdateDisplayName(!ClientOptions.AvatarsDisabled);
 
             return true;
         }

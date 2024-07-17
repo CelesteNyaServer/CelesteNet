@@ -1,12 +1,20 @@
-﻿using Celeste.Mod.CelesteNet.DataTypes;
-using MonoMod.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Celeste.Mod.CelesteNet.DataTypes;
+using MonoMod.Utils;
 
 namespace Celeste.Mod.CelesteNet.Server.Chat.Cmd {
-    public class CmdBan : ChatCmd {
 
-        public override string Args => "<user> <text>";
+    public class CmdBanQ : CmdBan {
+
+        public override string Info => $"Same as {Chat.Commands.Get<CmdBan>().InvokeString} but without Broadcast (quiet)";
+
+        public override bool InternalAliasing => true;
+
+        public override bool Quiet => true;
+    }
+
+    public class CmdBan : ChatCmd {
 
         public override CompletionType Completion => CompletionType.Player;
 
@@ -14,27 +22,48 @@ namespace Celeste.Mod.CelesteNet.Server.Chat.Cmd {
 
         public override bool MustAuth => true;
 
-        public override void Run(CmdEnv env, List<CmdArg> args) {
-            if (args.Count == 0)
-                throw new Exception("No user.");
+        public virtual bool Quiet => false;
 
-            if (args.Count == 1)
-                throw new Exception("No text.");
+        public override void Init(ChatModule chat) {
+            Chat = chat;
 
-            CelesteNetPlayerSession player = args[0].Session ?? throw new Exception("Invalid username or ID.");
+            ArgParser parser = new(chat, this);
+            parser.AddParameter(new ParamPlayerSession(chat));
+            parser.AddParameter(new ParamString(chat), "reason", "Naughty player.");
+            ArgParsers.Add(parser);
+        }
+
+        public override void Run(CmdEnv env, List<ICmdArg>? args) {
+            if (args == null || args.Count == 0)
+                throw new CommandRunException("No user.");
+
+            if (args.Count < 2)
+                throw new CommandRunException("No text.");
+
+            if (args[0] is not CmdArgPlayerSession sessionArg)
+                throw new CommandRunException("Invalid username or ID.");
+
+            CelesteNetPlayerSession player = sessionArg.Session ?? throw new CommandRunException("Invalid username or ID.");
+
+            string? banReason = args[1].ToString();
+
+            if (banReason.IsNullOrEmpty())
+                throw new CommandRunException("No reason given.");
 
             BanInfo ban = new() {
                 UID = player.UID,
                 Name = player.PlayerInfo?.FullName ?? "",
-                Reason = args[1].Rest,
+                Reason = banReason,
                 From = DateTime.UtcNow
             };
 
             ChatModule chat = env.Server.Get<ChatModule>();
-            new DynamicData(player).Set("leaveReason", chat.Settings.MessageBan);
-            player.Dispose();
+
+            if (!Quiet)
+                new DynamicData(player).Set("leaveReason", chat.Settings.MessageBan);
             player.Con.Send(new DataDisconnectReason { Text = "Banned: " + ban.Reason });
             player.Con.Send(new DataInternalDisconnect());
+            player.Dispose();
 
             env.Server.UserData.Save(player.UID, ban);
         }

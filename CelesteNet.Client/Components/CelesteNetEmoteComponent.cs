@@ -1,15 +1,8 @@
-﻿using Celeste.Mod.CelesteNet.Client.Entities;
+﻿using System;
+using Celeste.Mod.CelesteNet.Client.Entities;
 using Celeste.Mod.CelesteNet.DataTypes;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
 using Monocle;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using MDraw = Monocle.Draw;
 
 namespace Celeste.Mod.CelesteNet.Client.Components {
     public class CelesteNetEmoteComponent : CelesteNetGameComponent {
@@ -27,7 +20,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         public override void Initialize() {
             base.Initialize();
 
-            MainThreadHelper.Do(() => {
+            MainThreadHelper.Schedule(() => {
                 On.Celeste.HeartGem.Collect += OnHeartGemCollect;
                 On.Celeste.HeartGem.EndCutscene += OnHeartGemEndCutscene;
                 On.Celeste.Player.Die += OnPlayerDie;
@@ -40,7 +33,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             Wheel?.RemoveSelf();
 
             try {
-                MainThreadHelper.Do(() => {
+                MainThreadHelper.Schedule(() => {
                     On.Celeste.HeartGem.Collect -= OnHeartGemCollect;
                     On.Celeste.HeartGem.EndCutscene -= OnHeartGemEndCutscene;
                     On.Celeste.Player.Die -= OnPlayerDie;
@@ -118,6 +111,9 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 Wheel.Selected = -1;
             }
 
+            if (Context.Chat == null)
+                goto End;
+
             if (!Context.Chat.Active) {
                 if (Settings.ButtonEmote1.Pressed)
                     Send(0);
@@ -142,6 +138,9 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             }
 
             End:
+            if (Context?.Main == null)
+                return;
+
             if (Wheel?.Shown ?? false)
                 Context.Main.StateUpdated |= Context.Main.ForceIdle.Add("EmoteWheel");
             else

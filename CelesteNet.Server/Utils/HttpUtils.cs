@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 namespace Celeste.Mod.CelesteNet.Server.Utils
 {
+    // TODO 使用 HttpClient 而不是过时的 WebRequest
     internal class HttpUtils
     {
         public static string Post(string url, string content)
@@ -20,7 +21,6 @@ namespace Celeste.Mod.CelesteNet.Server.Utils
             req.Method = "POST";
             req.ContentType = "application/json; charset=utf-8";
             req.Headers.Add("celestenet", "nayNet");
-            #region 添加Post 参数
             byte[] data = Encoding.UTF8.GetBytes(content);
             req.ContentLength = data.Length;
             using (Stream reqStream = req.GetRequestStream())
@@ -28,7 +28,6 @@ namespace Celeste.Mod.CelesteNet.Server.Utils
                 reqStream.Write(data, 0, data.Length);
                 reqStream.Close();
             }
-            #endregion
 
             HttpWebResponse resp = (HttpWebResponse)req.GetResponse();
             Stream stream = resp.GetResponseStream();
@@ -58,6 +57,7 @@ namespace Celeste.Mod.CelesteNet.Server.Utils
 
             return retString;
         }
+
         public static string GetImage(string url,string fileName)
         {
             if (!Directory.Exists("temp"))

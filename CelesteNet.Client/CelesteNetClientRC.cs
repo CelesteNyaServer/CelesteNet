@@ -1,5 +1,4 @@
-﻿using MonoMod.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -34,7 +33,7 @@ namespace Celeste.Mod.CelesteNet.Client
             }
             catch (Exception e)
             {
-                e.LogDetailed();
+                Logger.LogDetailedException(e);
                 try
                 {
                     Listener?.Stop();
@@ -55,6 +54,7 @@ namespace Celeste.Mod.CelesteNet.Client
         {
             Listener?.Abort();
             tokenSource.Cancel();
+            //ListenerThread?.Abort();
             Listener = null;
             ListenerThread = null;
         }
@@ -321,8 +321,9 @@ header {
                     Name = "AuthCode",
                     InfoHTML = "Set Auth Code to Get Token",
                     Handle = c => {
+                        StringBuilder builder = new(256);
+                        WriteHTMLStart(c, builder);
                         NameValueCollection data = ParseQueryString(c.Request.RawUrl.Replace("#","?"));
-                        Console.WriteLine(data);
                         if (data.AllKeys.Contains("code"))
                         {
                             string name = data["code"].Trim();
@@ -334,8 +335,8 @@ header {
                             try
                             {
                                 string clientId = "DEV";
-                                string clientSecret ="DEV";
-                                var result =  HttpUtils.Post("https://celeste.centralteam.cn/oauth/token","\r\n{\"client_id\":\""+clientId+"\",\r\n\"client_secret\":\""+clientSecret+"\",\r\n\"grant_type\":\"authorization_code\",\r\n\"code\":\""+name+"\",\r\n\"redirect_uri\":\"http://localhost:38038/auth\"\r\n}\r\n");
+                                string clientSecret = "DEV";
+                                var result = HttpUtils.Post("https://celeste.centralteam.cn/oauth/token","\r\n{\"client_id\":\""+clientId+"\",\r\n\"client_secret\":\""+clientSecret+"\",\r\n\"grant_type\":\"authorization_code\",\r\n\"code\":\""+name+"\",\r\n\"redirect_uri\":\"http://localhost:38038/auth\"\r\n}\r\n");
                                 dynamic json = JsonConvert.DeserializeObject(result);
                                 CelesteNetClientModule.Settings.Key = json.access_token;
                                 CelesteNetClientModule.Settings.RefreshToken = json.refresh_token;
@@ -344,12 +345,19 @@ header {
                                 CelesteNetClientModule.Settings.ExpiredTime = (timeStamp + (int)json.expires_in).ToString();
                                 CelesteNetClientModule.Instance.SaveSettings();
                                 CelesteNetClientModule.Settings.Connected = true;
-                                Write(c, "Login Success,Please Closed this Page.");
-                            }catch(Exception e){
-                                Write(c, "Login Failed,Please Retry. Log:\n"+e.ToString());
+                                builder.AppendLine("<h3>Login successfully, please close this page.</h3>");
+                            } catch (Exception e) {
+                                builder.AppendLine("<h3>Login failed, please retry or report this error.</h3>");
+                                builder.AppendLine("<hr/>");
+                                builder.AppendLine("<p>Detailed exception:\n</p>");
+                                builder.Append("<ul><li><pre>");
+                                builder.Append(e.ToString().ReplaceLineEndings("</pre></li><li><pre>"));
+                                builder.AppendLine("</pre></li>");
+                                builder.AppendLine("</ul>");
                             }
                         }
-
+                        WriteHTMLEnd(c, builder);
+                        Write(c, builder.ToString());
                     }
                 }
             };

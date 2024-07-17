@@ -1,21 +1,15 @@
-﻿using Celeste.Mod.CelesteNet.DataTypes;
-using Mono.Cecil;
-using Mono.Options;
-using MonoMod.RuntimeDetour;
-using MonoMod.Utils;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Sockets;
 using System.Reflection;
-using System.Text;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Celeste.Mod.CelesteNet.DataTypes;
 
 namespace Celeste.Mod.CelesteNet.Server {
     public class CelesteNetServer : IDisposable {
@@ -39,8 +33,6 @@ namespace Celeste.Mod.CelesteNet.Server {
         public readonly Dictionary<Type, CelesteNetServerModule> ModuleMap = new();
         public readonly FileSystemWatcher ModulesFSWatcher;
 
-        public readonly DetourModManager DetourModManager;
-
         public int PlayerCounter = 0;
         public readonly TokenGenerator ConTokenGenerator = new();
         public readonly RWLock ConLock = new();
@@ -49,7 +41,7 @@ namespace Celeste.Mod.CelesteNet.Server {
         public readonly HashSet<CelesteNetPlayerSession> Sessions = new();
         public readonly ConcurrentDictionary<CelesteNetConnection, CelesteNetPlayerSession> PlayersByCon = new();
         public readonly ConcurrentDictionary<uint, CelesteNetPlayerSession> PlayersByID = new();
-        private readonly System.Timers.Timer HeartbeatTimer, PingRequestTimer;
+        private readonly System.Timers.Timer HeartbeatTimer, PingRequestTimer, AvatarSendTimer;
 
         public float CurrentTickRate { get; private set; }
         private float NextTickRate;
@@ -80,8 +72,6 @@ namespace Celeste.Mod.CelesteNet.Server {
             Timestamp = StartupTime.Ticks / TimeSpan.TicksPerMillisecond;
 
             Settings = settings;
-
-            DetourModManager = new();
 
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) => {
                 if (args.Name == null)
@@ -142,6 +132,9 @@ namespace Celeste.Mod.CelesteNet.Server {
 
             PingRequestTimer = new(Settings.PingRequestInterval);
             PingRequestTimer.Elapsed += (_, _) => SendPingRequests();
+
+            AvatarSendTimer = new(Settings.AvatarQueueInterval);
+            AvatarSendTimer.Elapsed += (_, _) => ClearAvatarQueues();
         }
 
         private void OnModuleFileUpdate(object sender, FileSystemEventArgs args) {
@@ -187,12 +180,13 @@ namespace Celeste.Mod.CelesteNet.Server {
             Logger.Log(LogLevel.INF, "server", $"Starting server on {serverEP}");
             ThreadPool.Scheduler.AddRole(new HandshakerRole(ThreadPool, this));
             ThreadPool.Scheduler.AddRole(new TCPUDPSenderRole(ThreadPool, this, serverEP));
-            ThreadPool.Scheduler.AddRole(new TCPReceiverRole(ThreadPool, this, (PlatformHelper.Is(MonoMod.Utils.Platform.Linux) && Settings.TCPRecvUseEPoll) ? new TCPEPollPoller() : new TCPFallbackPoller()));
+            ThreadPool.Scheduler.AddRole(new TCPReceiverRole(ThreadPool, this, (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && Settings.TCPRecvUseEPoll) ? new TCPEPollPoller() : new TCPFallbackPoller()));
             ThreadPool.Scheduler.AddRole(new UDPReceiverRole(ThreadPool, this, serverEP, ThreadPool.Scheduler.FindRole<TCPUDPSenderRole>()?.UDPSocket));
             ThreadPool.Scheduler.AddRole(new TCPAcceptorRole(ThreadPool, this, serverEP, ThreadPool.Scheduler.FindRole<HandshakerRole>()!, ThreadPool.Scheduler.FindRole<TCPReceiverRole>()!, ThreadPool.Scheduler.FindRole<UDPReceiverRole>()!, ThreadPool.Scheduler.FindRole<TCPUDPSenderRole>()!, tcpUdpConSettings));
 
             HeartbeatTimer.Start();
             PingRequestTimer.Start();
+            AvatarSendTimer.Start();
             CurrentTickRate = NextTickRate = Settings.MaxTickRate;
             ThreadPool.Scheduler.OnPreScheduling += AdjustTickRate;
 
@@ -309,10 +303,10 @@ namespace Celeste.Mod.CelesteNet.Server {
         public event Action<CelesteNetPlayerSession>? OnSessionStart;
 
         private int nextSesId = 0;
-        public CelesteNetPlayerSession CreateSession(CelesteNetConnection con, string playerUID, string playerName, CelesteNetClientOptions clientOptions,string playerColor,string avaterPhotoUrl,string playerPrefix) {
+        public CelesteNetPlayerSession CreateSession(CelesteNetConnection con, string playerUID, string playerName, CelesteNetClientOptions clientOptions, string playerColor, string avaterPhotoUrl, string playerPrefix) {
             CelesteNetPlayerSession ses;
             using (ConLock.W()) {
-                ses = new(this, con, unchecked ((uint) Interlocked.Increment(ref nextSesId)), playerUID, playerName, clientOptions,playerColor,avaterPhotoUrl,playerPrefix);
+                ses = new(this, con, unchecked ((uint) Interlocked.Increment(ref nextSesId)), playerUID, playerName, clientOptions, playerColor, avaterPhotoUrl, playerPrefix);
                 Sessions.Add(ses);
                 PlayersByCon[con] = ses;
                 PlayersByID[ses.SessionID] = ses;
@@ -431,6 +425,27 @@ namespace Celeste.Mod.CelesteNet.Server {
 
                             break;
                         }
+                    }
+                }
+            }
+        }
+
+        private void ClearAvatarQueues() {
+            using (ConLock.R()) {
+                foreach (CelesteNetPlayerSession ses in Sessions) {
+
+                    if (ses.AvatarSendQueue.Count > 0) {
+
+                        ses.AvatarSendQueue.RemoveWhere(other => !other.Alive);
+
+                        foreach (CelesteNetPlayerSession other in ses.AvatarSendQueue.Take(Settings.AvatarQueueBatchCount).ToList()) {
+                            foreach (DataInternalBlob frag in other.AvatarFragments) {
+                                ses.Con.Send(frag);
+                            }
+                            ses.AvatarSendQueue.Remove(other);
+                        }
+                        Logger.Log(LogLevel.DBG, "main", $"ClearAvatarQueues: Sent ~{Settings.AvatarQueueBatchCount}/{ses.AvatarSendQueue.Count} players' avatar frags to {ses.Name}");
+
                     }
                 }
             }

@@ -108,7 +108,8 @@
 	MODOPTIONS_CELESTENETCLIENT_BINDS_PLAYERLIST=		Player List - only work with "Show Player List" held!
 	MODOPTIONS_CELESTENETCLIENT_BINDS_CHAT=			Chat - only work while chat is open!
 	MODOPTIONS_CELESTENETCLIENT_BINDS_EMOTE=		Emotes
-
+    MODOPTIONS_CELESTENETCLIENT_AUTO_CONNECT=       Auto Connect
+    MODOPTIONS_CELESTENETCLIENT_USE_EN_FONT_WHEN_POSSIBLE= Use English Font when Possible
     MIAOCELESTENET_BOTHSERVERINSTALLEDWHOOPS= It seems that you have installed both MiaoCelesteNet and CelesteNet.
                                           Or you have installed multiple MiaoCelesteNet.
                                           If the following solution doesn't work, please ensure only one is installed.

@@ -16,7 +16,7 @@ namespace Celeste.Mod.CelesteNet.Client {
             // Find connection features
             // We don't buffer, as we could read actual packet data
             using NetworkStream netStream = new(sock, false);
-            using StreamReader reader = new(netStream);
+
             using StreamWriter writer = new(netStream);
             // Send the "HTTP" request
             StringBuilder reqBuilder = new($@"
@@ -25,7 +25,7 @@ Connection: keep-alive
 CelesteNet-TeapotVersion: {CelesteNetUtils.LoadedVersion}
 CelesteNet-ConnectionFeatures: {features.Select(f => f.GetType().FullName).Aggregate((string) null, (a, f) => (a == null) ? f : $"{a}, {f}")}
 CelesteNet-PlayerNameKey: {nameKey}
-CelesteNet-ClientVersion: {CelesteNetClientModule.Instance.Metadata.Version}
+CelesteNet-ClientVersion: {CelesteNetClientModule.Instance.Metadata.VersionString}
 ");
 
             foreach (FieldInfo field in typeof(CelesteNetClientOptions).GetFields(BindingFlags.Public | BindingFlags.Instance)) {
@@ -48,14 +48,14 @@ CelesteNet-ClientVersion: {CelesteNetClientModule.Instance.Metadata.Version}
             writer.Flush();
 
             // Read the "HTTP" response
-            string statusLine = reader.ReadLine();
+            string statusLine = netStream.UnbufferedReadLine();
             string[] statusSegs = statusLine.Split(new[] { ' ' }, 3);
             if (statusSegs.Length != 3)
                 throw new InvalidDataException($"Invalid HTTP response status line: '{statusLine}'");
             int statusCode = int.Parse(statusSegs[1]);
 
             Dictionary<string, string> headers = new();
-            for (string line = reader.ReadLine(); !string.IsNullOrEmpty(line); line = reader.ReadLine()) {
+            for (string line = netStream.UnbufferedReadLine(); !string.IsNullOrEmpty(line); line = netStream.UnbufferedReadLine()) {
                 int split = line.IndexOf(':');
                 if (split == -1)
                     throw new InvalidDataException($"Invalid HTTP header: '{line}'");
@@ -63,12 +63,12 @@ CelesteNet-ClientVersion: {CelesteNetClientModule.Instance.Metadata.Version}
             }
 
             string content = "";
-            for (string line = reader.ReadLine(); !string.IsNullOrEmpty(line); line = reader.ReadLine())
+            for (string line = netStream.UnbufferedReadLine(); !string.IsNullOrEmpty(line); line = netStream.UnbufferedReadLine())
                 content += line + "\n";
 
             // Parse the "HTTP response"
             if (statusCode != 418)
-                throw new ConnectionErrorException($"Server rejected teapot handshake (status {statusCode})", content.Trim());
+                throw new ConnectionErrorCodeException($"Server rejected teapot handshake (status {statusCode})", statusCode, content.Trim());
 
             uint conToken = uint.Parse(headers["CelesteNet-ConnectionToken"], NumberStyles.HexNumber);
             IConnectionFeature[] conFeatures = headers["CelesteNet-ConnectionFeatures"].Split(new[] { ',' }).Select(n => features.FirstOrDefault(f => f.GetType().FullName == n)).Where(f => f != null).ToArray();

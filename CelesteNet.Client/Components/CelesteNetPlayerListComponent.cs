@@ -29,6 +29,10 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             get => Active;
             set
             {
+                if (Client == null || !Client.IsReady) {
+                    Active = false;
+                    return;
+                }
                 if (Active == value)
                     return;
                 ScrolledDistance = 0f;
@@ -528,7 +532,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
 
         private void GetState(BlobPlayer blob, DataPlayerState state) {
             if (!string.IsNullOrWhiteSpace(state.SID)) {
-                AreaData area = AreaDataExt.Get(state.SID);
+                AreaData area = AreaData.Get(state.SID);
                 string chapter = area?.Name?.DialogCleanOrNull(Dialog.Languages["english"]) ?? state.SID;
 
                 blob.Location.Color = DefaultLevelColor;
@@ -547,7 +551,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 } else {
                     blob.Location.Icon = area?.Icon ?? "";
 
-                    string lobbySID = area?.GetMeta()?.Parent;
+                    string lobbySID = area?.Meta?.Parent;
                     AreaData lobby = string.IsNullOrEmpty(lobbySID) ? null : AreaData.Get(lobbySID);
                     if (lobby?.Icon != null)
                         blob.Location.Icon = lobby.Icon;

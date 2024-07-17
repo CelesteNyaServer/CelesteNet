@@ -1,11 +1,10 @@
-using Celeste.Mod.CelesteNet.DataTypes;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using Celeste.Mod.CelesteNet.DataTypes;
 
 namespace Celeste.Mod.CelesteNet.Server {
     /*
@@ -75,7 +74,11 @@ namespace Celeste.Mod.CelesteNet.Server {
                                     } break;
                                     case SendAction.FlushUDPQueue: {
                                         Logger.Log(LogLevel.WRN, "udpsend", $"Error flushing connection {con} UDP queue: {e}");
-                                        con.UDPQueue.SignalFlushed();
+                                        try {
+                                            con.UDPQueue.SignalFlushed();
+                                        } catch (InvalidOperationException) {
+                                            // this just means the exception that SignalFlushed can throw most likely got us here in the first place
+                                        }
                                         con.DecreaseUDPScore(reason: "Error flushing queue");
                                     } break;
                                 }
