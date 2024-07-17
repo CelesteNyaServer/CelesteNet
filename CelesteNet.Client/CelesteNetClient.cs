@@ -316,7 +316,11 @@ namespace Celeste.Mod.CelesteNet.Client {
             if (info == null)
                 return false;
 
-            info.UpdateDisplayName(!Options.AvatarsDisabled);
+            // celestenet 将收到玩家名字为空这个行为当做断线处理...
+            if (!string.IsNullOrEmpty(info.FullName))
+                info.UpdateDisplayName(!Options.AvatarsDisabled);
+            else
+                info.DisplayName = null;
             return true;
         }
 
