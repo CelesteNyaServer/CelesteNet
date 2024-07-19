@@ -110,6 +110,7 @@
     MODOPTIONS_CELESTENETCLIENT_BINDS_EMOTE=		表情
     MODOPTIONS_CELESTENETCLIENT_AUTO_CONNECT=           启动自动连接到服务器
     MODOPTIONS_CELESTENETCLIENT_USE_EN_FONT_WHEN_POSSIBLE=    如果可以使用英文字体
+    MODOPTIONS_CELESTENETCLIENT_SERVER_SELECT= 服务器选择
 
     MIAOCELESTENET_BOTHSERVERINSTALLEDWHOOPS= 似乎你同时安装了群服以及官服。
                                               （或者同时安装了多个群服，如果下述解决方案无效请确保仅有一个群服被安装。）

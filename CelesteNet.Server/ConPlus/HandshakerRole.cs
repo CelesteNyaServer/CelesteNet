@@ -231,13 +231,13 @@ Connection: close
 
                 if (!headers.TryGetValue("CelesteNet-ClientVersion",out string? clientVersion))
                 {
-                    if (clientVersion != "3.1.5")
+                    if (clientVersion != "3.1.8")
                     {
                         await writer.WriteAsync(
 $@"HTTP/1.1 403 Access Denied
 Connection: close
 
-Client is so Old. Need Client Version 3.1.5!"
+Client is so Old. Need Client Version 3.1.8!"
     .Trim().Replace("\r\n", "\n").Replace("\n", "\r\n")
 );
                         return null;
@@ -245,13 +245,13 @@ Client is so Old. Need Client Version 3.1.5!"
                 }
                 else
                 {
-                    if (clientVersion != "3.1.5")
+                    if (clientVersion != "3.1.8")
                     {
                         await writer.WriteAsync(
 $@"HTTP/1.1 403 Access Denied
 Connection: close
 
-Client is so Old. Need Client Version 3.1.5!"
+Client is so Old. Need Client Version 3.1.8!"
     .Trim().Replace("\r\n", "\n").Replace("\n", "\r\n")
 );
                         return null;
