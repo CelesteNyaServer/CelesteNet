@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -10,6 +11,7 @@ using System.Threading.Tasks;
 
 namespace Celeste.Mod.CelesteNet.Client.Utils
 {
+    // TODO 使用 HttpClient 而不是过时的 WebRequest
     internal class HttpUtils
     {
         public static string Post(string url, string content)
@@ -57,53 +59,6 @@ namespace Celeste.Mod.CelesteNet.Client.Utils
             myResponseStream.Close();
 
             return retString;
-        }
-        public static string GetImage(string url)
-        {
-            WebRequest webRequest = WebRequest.Create(url);
-            WebResponse webResponse = webRequest.GetResponse();
-            Stream myStream = webResponse.GetResponseStream();
-            System.Drawing.Image img = System.Drawing.Image.FromStream(myStream);
-            if (!Directory.Exists("temp"))
-            {
-                Directory.CreateDirectory("temp");
-            }
-            string filename = "temp/" + Guid.NewGuid().ToString("N") + ".png";
-            resizeImage(img, new Size(64, 64)).Save(filename, System.Drawing.Imaging.ImageFormat.Png);
-            return filename;
-        }
-
-        private static System.Drawing.Image resizeImage(System.Drawing.Image imgToResize, Size size)
-        {
-            //获取图片宽度
-            int sourceWidth = imgToResize.Width;
-            //获取图片高度
-            int sourceHeight = imgToResize.Height;
-
-            float nPercent = 0;
-            float nPercentW = 0;
-            float nPercentH = 0;
-            //计算宽度的缩放比例
-            nPercentW = ((float)size.Width / (float)sourceWidth);
-            //计算高度的缩放比例
-            nPercentH = ((float)size.Height / (float)sourceHeight);
-
-            if (nPercentH < nPercentW)
-                nPercent = nPercentH;
-            else
-                nPercent = nPercentW;
-            //期望的宽度
-            int destWidth = (int)(sourceWidth * nPercent);
-            //期望的高度
-            int destHeight = (int)(sourceHeight * nPercent);
-
-            Bitmap b = new Bitmap(destWidth, destHeight);
-            Graphics g = Graphics.FromImage((System.Drawing.Image)b);
-            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            //绘制图像
-            g.DrawImage(imgToResize, 0, 0, destWidth, destHeight);
-            g.Dispose();
-            return (System.Drawing.Image)b;
         }
     }
 }

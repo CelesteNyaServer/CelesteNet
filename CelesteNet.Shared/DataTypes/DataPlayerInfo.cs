@@ -1,16 +1,8 @@
-﻿using Microsoft.Xna.Framework;
-using Monocle;
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System;
+using Microsoft.Xna.Framework;
 
-namespace Celeste.Mod.CelesteNet.DataTypes {
+namespace Celeste.Mod.CelesteNet.DataTypes
+{
     public class DataPlayerInfo : DataType<DataPlayerInfo> {
 
         static DataPlayerInfo() {
@@ -18,10 +10,15 @@ namespace Celeste.Mod.CelesteNet.DataTypes {
         }
 
         public uint ID;
-        public string Name = "";
-        public string FullName = "";
-        public string DisplayName = "";
+        public string Name = ""; // 论坛名
+        public string FullName = ""; // 带名称冲突后缀名 (可能在单客户端多连接时发生)
+        public string AvatarID = ""; // 头像 emote ID
+        public string Prefix = ""; // 头衔
         public Color NameColor = Color.White;
+
+        public string DisplayName = "";
+
+        public DataPlayerInfo() { }
 
         public override MetaType[] GenerateMeta(DataContext ctx)
             => new MetaType[] {
@@ -35,20 +32,30 @@ namespace Celeste.Mod.CelesteNet.DataTypes {
         protected override void Read(CelesteNetBinaryReader reader) {
             Name = reader.ReadNetString();
             FullName = reader.ReadNetString();
-            DisplayName = reader.ReadNetString();
+            AvatarID = reader.ReadNetString();
+            Prefix = reader.ReadNetString();
             NameColor = reader.ReadColorNoA();
         }
 
         protected override void Write(CelesteNetBinaryWriter writer) {
             writer.WriteNetString(Name);
             writer.WriteNetString(FullName);
-            writer.WriteNetString(DisplayName);
+            writer.WriteNetString(AvatarID);
+            writer.WriteNetString(Prefix);
             writer.WriteNoA(NameColor);
         }
 
         public override string ToString()
             => $"#{ID}: {FullName} ({Name})";
 
+        public void UpdateDisplayName(bool avatarEnabled) {
+            if (!string.IsNullOrEmpty(Prefix))
+                DisplayName = $"[{Prefix}] {FullName}";
+            else
+                DisplayName = $"{FullName}";
+            if (avatarEnabled)
+                DisplayName = $":{AvatarID}: {DisplayName}";
+        }
     }
 
 

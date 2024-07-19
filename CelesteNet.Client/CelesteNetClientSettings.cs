@@ -42,7 +42,7 @@ namespace Celeste.Mod.CelesteNet.Client {
         public TextMenu.Button LoginButton { get; protected set; }
 
         [SettingName("MODOPTIONS_CELESTENETCLIENT_AUTO_CONNECT")]
-        public bool AutoConnect { get; set; } = true;
+        public bool AutoConnect { get; set; }
 
         [SettingName("MODOPTIONS_CELESTENETCLIENT_USE_EN_FONT_WHEN_POSSIBLE")]
         public bool UseENFontWhenPossible { get; set; } = false;

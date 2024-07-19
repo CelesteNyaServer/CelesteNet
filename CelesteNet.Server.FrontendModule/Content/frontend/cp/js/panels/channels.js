@@ -78,6 +78,7 @@ export class FrontendChannelsPanel extends FrontendBasicPanel {
 
   async update() {
     this.data = await fetch(this.ep).then(r => r.json());
+    this.subheader = "(" + this.data.length + ")";
     this.rebuildList();
   }
 
@@ -107,7 +108,8 @@ export class FrontendChannelsPanel extends FrontendBasicPanel {
       )(el);
 
       this.frontend.dom.setContext(el,
-        [ "error_outline", `Dissolve ${c.Name}`, () => this.frontend.sync.run("dissolve", c.ID) ]
+        [ "error_outline", `Dissolve ${c.Name}`, () => this.frontend.sync.run("dissolve", c.ID) ],
+        [ "content_copy", `Copy Name: ${c.Name}`, () =>  navigator.clipboard.writeText(c.Name) ]
       );
 
       return el;

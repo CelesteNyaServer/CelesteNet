@@ -12,6 +12,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Celeste.Mod.CelesteNet.DataTypes;
 
 namespace Celeste.Mod.CelesteNet.Server {
     /*
@@ -95,7 +96,7 @@ namespace Celeste.Mod.CelesteNet.Server {
                 IConnectionFeature? feature = (IConnectionFeature?) Activator.CreateInstance(type);
                 if (feature == null)
                     throw new Exception($"Cannot create instance of connection feature {type.FullName}");
-                Logger.Log(LogLevel.VVV, "handshake", $"Found connection feature: {type.FullName}");
+                Logger.Log(LogLevel.DBG, "handshake", $"Found connection feature: {type.FullName}");
                 ConFeatures.Add((type.FullName, feature));
             }
         }
@@ -120,7 +121,7 @@ namespace Celeste.Mod.CelesteNet.Server {
 
                 // Do the teapot handshake
                 IConnectionFeature[]? conFeatures = null;
-                string? playerUID = null, playerName = null,playerColor = null,avaterPhotoUrl = null,playerPrefix = null;
+                string? playerUID = null, playerName = null, playerColor = null, avaterPhotoUrl = null, playerPrefix = null;
                 CelesteNetClientOptions? clientOptions = null;
                 using (CancellationTokenSource tokenSrc = new()) {
                     // .NET is completly stupid, you can't cancel async socket operations
@@ -137,7 +138,7 @@ namespace Celeste.Mod.CelesteNet.Server {
                             (conFeatures, playerUID, playerName, clientOptions,playerColor,avaterPhotoUrl,playerPrefix) = teapotRes.Value;
                     } catch {
                         if (tokenSrc.IsCancellationRequested) {
-                            Logger.Log(LogLevel.VVV, "tcpudphs", $"Handshake for connection {remoteEP} timed out, maybe an old client?");
+                            Logger.Log(LogLevel.INF, "tcpudphs", $"Handshake for connection {remoteEP} timed out, maybe an old client?");
                             sock.Dispose();
                             return;
                         }
@@ -145,13 +146,17 @@ namespace Celeste.Mod.CelesteNet.Server {
                     }
                 }
 
-                if (conFeatures == null || playerUID.IsNullOrEmpty() || playerName.IsNullOrEmpty() || clientOptions == null) {
-                    Logger.Log(LogLevel.VVV, "tcpudphs", $"Connection from {remoteEP} failed teapot handshake");
+                if (conFeatures == null ||
+                    playerUID.IsNullOrEmpty() || 
+                    playerName.IsNullOrEmpty() ||
+                    clientOptions == null) {
+                    Logger.Log(LogLevel.INF, "tcpudphs", $"Connection from {remoteEP} failed teapot handshake");
                     sock.ShutdownSafe(SocketShutdown.Both);
                     sock.Close();
                     return;
                 }
-                Logger.Log(LogLevel.VVV, "tcpudphs", $"Connection {remoteEP} teapot handshake success: connection features '{conFeatures.Aggregate((string?) null, (a, f) => ((a == null) ? $"{f}" : $"{a}, {f}"))}' player UID {playerUID} player name {playerName}");
+                var features = conFeatures.Aggregate((string?)null, (a, f) => ((a == null) ? $"{f}" : $"{a}, {f}"));
+                Logger.Log(LogLevel.VVV, "tcpudphs", $"Connection {remoteEP} teapot handshake success: connection features '{features}' player UID {playerUID} player name {playerName}");
 
                 // Create the connection, do the generic connection handshake
                 Server.HandleConnect(con = new(Server, conToken, settings, sock, tcpReceiver, udpReceiver, sender));
@@ -162,7 +167,7 @@ namespace Celeste.Mod.CelesteNet.Server {
                     // Better safe than sorry
                     if (!alive || !con.IsConnected)
                         return;
-                    Server.CreateSession(con, playerUID, playerName, clientOptions,playerColor,avaterPhotoUrl,playerPrefix);
+                    Server.CreateSession(con, playerUID, playerName, clientOptions, playerColor, avaterPhotoUrl, playerPrefix);
                 }
             } catch {
                 con?.Dispose();
@@ -173,11 +178,10 @@ namespace Celeste.Mod.CelesteNet.Server {
 
         // Let's mess with web crawlers even more ;)
         // Also: I'm a Teapot
-        private async Task<(IConnectionFeature[] conFeatures, string playerUID, string playerName, CelesteNetClientOptions clientOptions,string playerColor,string avaterPhotoUrl,string playerPrefix)?> TeapotHandshake<T>(Socket sock, uint conToken, T settings, string conUID) where T : new() {
+        private async Task<(IConnectionFeature[] conFeatures, string playerUID, string playerName, CelesteNetClientOptions clientOptions, string playerColor, string avaterPhotoUrl, string playerPrefix)?> TeapotHandshake<T>(Socket sock, uint conToken, T settings, string conUID) where T : new() {
             using NetworkStream netStream = new(sock, false);
             BufferedStream bufStream = new(netStream);
             try {
-                using StreamReader reader = new(bufStream, CelesteNetUtils.UTF8NoBOM, false, 1024, true);
                 using StreamWriter writer = new(bufStream, CelesteNetUtils.UTF8NoBOM, 1024, true);
                 async Task<(IConnectionFeature[], string, string, CelesteNetClientOptions,string,string,string)?> Send500() {
                     await writer.WriteAsync(
@@ -191,7 +195,7 @@ The server encountered an internal error while handling the request"
                 }
 
                 // Parse the "HTTP" request line
-                string? reqLine = await reader.ReadLineAsync();
+                string? reqLine = netStream.UnbufferedReadLine();
                 if (reqLine == null)
                     return await Send500();
 
@@ -205,7 +209,7 @@ The server encountered an internal error while handling the request"
 
                 // Parse the headers
                 Dictionary<string, string> headers = new();
-                for (string? line = await reader.ReadLineAsync(); !string.IsNullOrEmpty(line); line = await reader.ReadLineAsync()) {
+                for (string? line = netStream.UnbufferedReadLine(); !string.IsNullOrEmpty(line); line = netStream.UnbufferedReadLine()) {
                     int split = line.IndexOf(':');
                     if (split == -1)
                         return await Send500();
@@ -218,7 +222,7 @@ The server encountered an internal error while handling the request"
                     return await Send500();
 
                 if (teapotVer != CelesteNetUtils.LoadedVersion) {
-                    Logger.Log(LogLevel.VVV, "teapot", $"Teapot version mismatch for connection {sock.RemoteEndPoint}: {teapotVer} [client] != {CelesteNetUtils.LoadedVersion} [server]");
+                    Logger.Log(LogLevel.DBG, "teapot", $"Teapot version mismatch for connection {sock.RemoteEndPoint}: {teapotVer} [client] != {CelesteNetUtils.LoadedVersion} [server]");
                     await writer.WriteAsync(
 $@"HTTP/1.1 409 Version Mismatch
 Connection: close
@@ -229,7 +233,10 @@ Connection: close
                     return null;
                 }
 
-                if (!headers.TryGetValue("CelesteNet-ClientVersion",out string? clientVersion))
+                headers.TryGetValue("CelesteNet-ClientVersion", out string? clientVersion);
+
+                const string expectedVersion = "3.2.0-dev";
+                if (clientVersion != expectedVersion)
                 {
                     if (clientVersion != "3.1.8")
                     {
@@ -257,6 +264,7 @@ Client is so Old. Need Client Version 3.1.8!"
                         return null;
                     }
                 }
+                
                 // Get the list of supported connection features
                 HashSet<string> conFeatures;
                 if (headers.TryGetValue("CelesteNet-ConnectionFeatures", out string? conFeaturesRaw))
@@ -276,15 +284,15 @@ Client is so Old. Need Client Version 3.1.8!"
                     return await Send500();
 
                 // Authenticate name-key
-                string? errorReason = AuthenticatePlayerNameKey(playerNameKey, conUID, out string? playerUID, out string? playerName,out string? playerColor,out string? avaterPhotoUrl,out string? playerPrefix);
+                string? errorReason = AuthenticatePlayerNameKey(playerNameKey, conUID, out string? playerUID, out string? playerName, out string? playerColor, out string? avaterPhotoUrl, out string? playerPrefix);
                 if (playerUID == null)
                     errorReason ??= "No UID";
                 if (playerName == null)
-                    errorReason ??= "No name";
+                    errorReason ??= "No name, please login first.";
                 if (avaterPhotoUrl == null)
                     avaterPhotoUrl = "https://celeste.centralteam.cn/assets/uploads/profile/default.jpg";
                 if (errorReason != null || playerUID == null || playerName == null) {
-                    Logger.Log(LogLevel.VVV, "teapot", $"Error authenticating name-key '{playerNameKey}' for connection {sock.RemoteEndPoint}: {errorReason}");
+                    Logger.Log(LogLevel.INF, "teapot", $"Error authenticating name-key '{playerNameKey}' for connection {sock.RemoteEndPoint}: {errorReason}");
                     await writer.WriteAsync(
 $@"HTTP/1.1 403 Access Denied
 Connection: close
@@ -366,7 +374,7 @@ Who wants some tea?"
                     .Trim().Replace("\r\n", "\n").Replace("\n", "\r\n") + "\r\n" + "\r\n"
                 );
 
-                return (matchedFeats.Select(f => f.feature).ToArray(), playerUID, playerName, clientOptions,playerColor,avaterPhotoUrl,playerPrefix);
+                return (matchedFeats.Select(f => f.feature).ToArray(), playerUID, playerName, clientOptions, playerColor, avaterPhotoUrl, playerPrefix);
             } finally {
                 // We must try-catch buffered stream disposes as those will try to flush.
                 // If a network stream was torn down out of our control, it will throw!
@@ -375,6 +383,7 @@ Who wants some tea?"
                 } catch {
                 }
             }
+            return null;
         }
 
         public async Task DoConnectionHandshake(CelesteNetConnection con, IConnectionFeature[] features) {
@@ -390,7 +399,7 @@ Who wants some tea?"
             });
         }
 
-        public string? AuthenticatePlayerNameKey(string nameKey, string conUID, out string? playerUID, out string? playerName,out string? playerColor ,out string? avaterPhotoUrl,out string? playerPrefix) {
+        public string? AuthenticatePlayerNameKey(string nameKey, string conUID, out string? playerUID, out string? playerName, out string? playerColor, out string? avaterPhotoUrl, out string? playerPrefix) {
             // Get the player UID and name from the player name-key
             playerUID = playerName = avaterPhotoUrl = playerPrefix = playerColor = null;
             if (nameKey.Length > 1 && nameKey.StartsWith("#"))

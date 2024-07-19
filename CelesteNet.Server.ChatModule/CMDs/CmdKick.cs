@@ -1,12 +1,18 @@
-﻿using Celeste.Mod.CelesteNet.DataTypes;
+﻿using System.Collections.Generic;
+using Celeste.Mod.CelesteNet.DataTypes;
 using MonoMod.Utils;
-using System;
-using System.Collections.Generic;
 
 namespace Celeste.Mod.CelesteNet.Server.Chat.Cmd {
-    public class CmdKick : ChatCmd {
+    public class CmdKickQ : CmdKick {
 
-        public override string Args => "<user>";
+        public override string Info => $"Same as {Chat.Commands.Get<CmdKick>().InvokeString} but without Broadcast (quiet)";
+
+        public override bool InternalAliasing => true;
+
+        public override bool Quiet => true;
+    }
+
+    public class CmdKick : ChatCmd {
 
         public override string Info => "Kick a player from the server.";
 
@@ -14,16 +20,31 @@ namespace Celeste.Mod.CelesteNet.Server.Chat.Cmd {
 
         public override bool MustAuth => true;
 
-        public override void Run(CmdEnv env, List<CmdArg> args) {
-            if (args.Count == 0)
-                throw new Exception("No user.");
+        public virtual bool Quiet => false;
 
-            CelesteNetPlayerSession player = args[0].Session ?? throw new Exception("Invalid username or ID.");
+        public override void Init(ChatModule chat) {
+            Chat = chat;
 
-            new DynamicData(player).Set("leaveReason", Chat.Settings.MessageKick);
-            player.Dispose();
-            player.Con.Send(new DataDisconnectReason { Text = "Kicked" });
+            ArgParser parser = new(chat, this);
+            parser.AddParameter(new ParamPlayerSession(chat));
+            ArgParsers.Add(parser);
+        }
+
+        public override void Run(CmdEnv env, List<ICmdArg>? args) {
+            if (args == null || args.Count == 0)
+                throw new CommandRunException("No user.");
+
+            if (args[0] is not CmdArgPlayerSession sessionArg) {
+                throw new CommandRunException("Invalid username or ID.");
+            }
+
+            CelesteNetPlayerSession player = sessionArg.Session ?? throw new CommandRunException("Invalid username or ID.");
+
+            if (!Quiet)
+                new DynamicData(player).Set("leaveReason", Chat.Settings.MessageKick);
+            player.Con.Send(new DataDisconnectReason { Text = Chat.Settings.MessageDefaultKickReason });
             player.Con.Send(new DataInternalDisconnect());
+            player.Dispose();
         }
 
     }

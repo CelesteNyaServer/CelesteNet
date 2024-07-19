@@ -67,10 +67,12 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         public override void Initialize() {
             base.Initialize();
 
-            MainThreadHelper.Do(() => {
-                using (new DetourContext("CelesteNetMain") {
-                    Before = { "*" }
-                }) {
+            MainThreadHelper.Schedule(() => {
+                // modern monomod does detourcontexts differently
+                using (new DetourConfigContext(new DetourConfig(
+                    "CelesteNetMain",
+                    int.MinValue  // this simulates before: "*"
+                )).Use()) {
                     On.Monocle.Scene.SetActualDepth += OnSetActualDepth;
                     On.Celeste.Level.LoadLevel += OnLoadLevel;
                     Everest.Events.Level.OnExit += OnExitLevel;
@@ -98,7 +100,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             base.Dispose(disposing);
 
             try {
-                MainThreadHelper.Do(() => {
+                MainThreadHelper.Schedule(() => {
                     On.Monocle.Scene.SetActualDepth -= OnSetActualDepth;
                     On.Celeste.Level.LoadLevel -= OnLoadLevel;
                     Everest.Events.Level.OnExit -= OnExitLevel;
@@ -148,7 +150,11 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         #region Handlers
 
         public void Handle(CelesteNetConnection con, DataDisconnectReason reason) {
-            CelesteNetClientModule.Settings.Connected = false;
+            CelesteNetClientModule.Instance.lastDisconnectReason = reason;
+            // attempting to disconnect from within TCP recv thread here could cause game freeze
+            // if StartThread was also trying to dispose client context at the same time.
+            // So this will be handled within Client Context instead, based on lastDisconnectReason being set.
+            //CelesteNetClientModule.Settings.Connected = false;
         }
 
         public void Handle(CelesteNetConnection con, DataPlayerInfo player) {
@@ -385,7 +391,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 if (SaveData.Instance == null)
                     SaveData.InitializeDebugMode();
 
-                AreaData area = AreaDataExt.Get(target.SID);
+                AreaData area = AreaData.Get(target.SID);
 
                 if (area == null) {
                     if (target.Force || string.IsNullOrEmpty(target.SID)) {
@@ -399,7 +405,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                             message = message.Replace("((player))", SaveData.Instance.Name);
                             message = message.Replace("((sid))", target.SID);
 
-                            LevelEnterExt.ErrorMessage = message;
+                            LevelEnter.ErrorMessage = message;
                             LevelEnter.Go(new(new AreaKey(1).SetSID("")), false);
                         });
                     }
@@ -971,7 +977,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             int hairCount = Calc.Clamp(player.Sprite.HairCount, 0, Ghost.MaxHairLength);
             Vector2[] hairScales = new Vector2[hairCount];
             for (int i = 0; i < hairCount; i++)
-                hairScales[i] = player.Hair.GetHairScale(i) * new Vector2(((i == 0) ? (int) player.Hair.Facing : 1) / Math.Abs(player.Sprite.Scale.X), 1);
+                hairScales[i] = player.Hair.PublicGetHairScale(i) * new Vector2(((i == 0) ? (int) player.Hair.Facing : 1) / Math.Abs(player.Sprite.Scale.X), 1);
             string[] hairTextures = new string[hairCount];
             for (int i = 0; i < hairCount; i++)
                 hairTextures[i] = player.Hair.GetHairTexture(i).AtlasPath;

@@ -4,22 +4,21 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using Celeste.Mod.CelesteNet.DataTypes;
 using Celeste.Mod.CelesteNet.Server.Chat;
-using Newtonsoft.Json;
-using WebSocketSharp.Net;
-using WebSocketSharp.Server;
-
-#if NETCORE
-using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
-using Microsoft.CodeAnalysis.Text;
-#endif
+using Newtonsoft.Json;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+using WebSocketSharp.Net;
+using WebSocketSharp.Server;
 
 namespace Celeste.Mod.CelesteNet.Server.Control {
     public static partial class RCEndpoints {
@@ -57,25 +56,26 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             string sessionkey;
             if (!key.IsNullOrEmpty() &&
                 f.Server.UserData.GetUID(key) is string uid && !uid.IsNullOrEmpty() &&
-                f.Server.UserData.TryLoad(uid, out BasicUserInfo info)) {
-                    sessionkey = "";
-                    if (info.Tags.Contains(BasicUserInfo.TAG_AUTH_EXEC)) {
-                        sessionkey = f.GetNewKey(execAuth: true);
-                    } else if (info.Tags.Contains(BasicUserInfo.TAG_AUTH)) {
-                        sessionkey = f.GetNewKey();
-                    } 
-                    if (!sessionkey.IsNullOrEmpty()) {
-                        f.SetSessionAuthCookie(c, sessionkey);
-                        f.RespondJSON(c, new {
-                            Key = sessionkey,
-                            Info = string.IsNullOrEmpty(info.Discrim) || info.Discrim == "0"
-                            ? $"Welcome, {info.Name} ({uid})"
-                            : $"Welcome, {info.Name}#{info.Discrim}"
-                        });
-                        return;
-                    } else {
-                        // Fall through to "previous session" / password checks.
-                    }
+                f.Server.UserData.TryLoad(uid, out BasicUserInfo info))
+            {
+                sessionkey = "";
+                if (info.Tags.Contains(BasicUserInfo.TAG_AUTH_EXEC)) {
+                    sessionkey = f.GetNewKey(execAuth: true);
+                } else if (info.Tags.Contains(BasicUserInfo.TAG_AUTH)) {
+                    sessionkey = f.GetNewKey();
+                }
+                if (!sessionkey.IsNullOrEmpty()) {
+                    f.SetSessionAuthCookie(c, sessionkey);
+                    f.RespondJSON(c, new {
+                        Key = sessionkey,
+                        Info = string.IsNullOrEmpty(info.Discrim) || info.Discrim == "0"
+                        ? $"Welcome, {info.Name} ({uid})"
+                        : $"Welcome, {info.Name}#{info.Discrim}"
+                    });
+                    return;
+                } else {
+                    // Fall through to "previous session" / password checks.
+                }
             }
 
             if (expired) {
@@ -155,12 +155,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             f.RespondJSON(c, AppDomain.CurrentDomain.GetAssemblies().Select(asm => new {
                 asm.GetName().Name,
                 Version = asm.GetName().Version?.ToString() ?? "",
-                Context =
-#if NETCORE
-                    (AssemblyLoadContext.GetLoadContext(asm) ?? AssemblyLoadContext.Default)?.Name ?? "Unknown",
-#else
-                    AppDomain.CurrentDomain.FriendlyName
-#endif
+                Context = (AssemblyLoadContext.GetLoadContext(asm) ?? AssemblyLoadContext.Default)?.Name ?? "Unknown"
             }).ToList());
         }
 
@@ -263,7 +258,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
 
                     f.Server.PlayerCounter,
                     Registered = f.Server.UserData.GetRegisteredCount(),
-                    Banned = f.Server.UserData.LoadAll<BanInfo>().GroupBy(ban => ban.UID).Select(g => g.First()).Count(ban => !ban.Reason.IsNullOrEmpty()),
+                    Banned = f.Server.UserData.LoadAll<BanInfo>().Values.GroupBy(ban => ban.UID).Select(g => g.First()).Count(ban => !ban.Reason.IsNullOrEmpty()),
 
                     Connections = auth ? NumCons : (int?) null,
                     TCPConnections = auth ? NumTCPCons : (int?) null,
@@ -273,10 +268,14 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                     PlayersByID = auth ? f.Server.PlayersByID.Count : (int?) null,
                     PlayerRefs = f.Server.Data.GetRefs<DataPlayerInfo>().Length,
 
-                    TCPDownlinkBpS = TCPRecvBpSRate, TCPDownlinkPpS = TCPRecvPpSRate,
-                    UDPDownlinkBpS = UDPRecvBpSRate, UDPDownlinkPpS = UDPRecvPpSRate,
-                    TCPUplinkBpS = TCPSendBpSRate, TCPUplinkPpS = TCPSendPpSRate,
-                    UDPUplinkBpS = UDPSendBpSRate, UDPUplinkPpS = UDPSendPpSRate,
+                    TCPDownlinkBpS = TCPRecvBpSRate,
+                    TCPDownlinkPpS = TCPRecvPpSRate,
+                    UDPDownlinkBpS = UDPRecvBpSRate,
+                    UDPDownlinkPpS = UDPRecvPpSRate,
+                    TCPUplinkBpS = TCPSendBpSRate,
+                    TCPUplinkPpS = TCPSendPpSRate,
+                    UDPUplinkBpS = UDPSendBpSRate,
+                    UDPUplinkPpS = UDPSendPpSRate,
                 });
         }
 
@@ -314,24 +313,123 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                 BasicUserInfo info = f.Server.UserData.Load<BasicUserInfo>(uid);
                 BanInfo ban = f.Server.UserData.Load<BanInfo>(uid);
                 KickHistory kicks = f.Server.UserData.Load<KickHistory>(uid);
-                return new {
-                    UID = uid,
-                    info.Name,
-                    info.Discrim,
-                    info.Tags,
-                    Key = (!f.IsAuthorizedExec(c) && info.Tags.Contains(BasicUserInfo.TAG_AUTH)) || info.Tags.Contains(BasicUserInfo.TAG_AUTH_EXEC) ? null : f.Server.UserData.GetKey(uid),
-                    Ban = ban.Reason.IsNullOrEmpty() ? null : new {
-                        ban.Name,
-                        ban.Reason,
-                        From = ban.From?.ToUnixTimeMillis() ?? 0,
-                        To = ban.To?.ToUnixTimeMillis() ?? 0
-                    },
-                    Kicks = kicks.Log.Select(e => new {
-                        e.Reason,
-                        From = e.From?.ToUnixTimeMillis() ?? 0
-                    }).ToArray()
-                };
+                return f.UserInfoToFrontend(uid, info, ban, kicks, f.IsAuthorizedExec(c));
             }).ToArray());
+        }
+
+        [RCEndpoint(true,
+            "/userinfosfiltered",
+            "?onlyspecial={true|false}&forcereload={true|false}&from={first}&count={count}&search={search}",
+            "?onlyspecial=true&forcereload=false&from=0&count=100&search=Red",
+            "Filtered User Infos",
+            "Get filtered user infos. 'Only special' means bans, kicks, tagged. 'Force reload' means query UserData even for Only Special.")]
+        public static void UserInfosFiltered(Frontend f, HttpRequestEventArgs c) {
+            NameValueCollection args = f.ParseQueryString(c.Request.RawUrl);
+
+            if (!bool.TryParse(args["onlyspecial"], out bool onlyspecial))
+                onlyspecial = false;
+
+            if (!bool.TryParse(args["forcereload"], out bool forcereload))
+                forcereload = false;
+
+            if (!int.TryParse(args["from"], out int from) || from <= 0)
+                from = 0;
+            if (!int.TryParse(args["count"], out int count) || count <= 0)
+                count = 100;
+
+            string? search = args["search"];
+
+            bool FilterBasicUserInfo(BasicUserInfo info) {
+                if (search.IsNullOrEmpty())
+                    return true;
+
+                if (info.Name.Contains(search, StringComparison.InvariantCultureIgnoreCase))
+                    return true;
+
+                return false;
+            }
+
+            if (onlyspecial) {
+                if (forcereload) {
+                    f.RefreshTaggedUserInfos();
+                }
+
+                Dictionary<string, BanInfo> bans = f.Server.UserData.LoadAll<BanInfo>();
+                Dictionary<string, KickHistory> kickHistories = f.Server.UserData.LoadAll<KickHistory>();
+
+                List<string> uidsSeen = new(f.TaggedUsers.Count + bans.Count + kickHistories.Count);
+                List<object> userInfos = new(f.TaggedUsers.Count + bans.Count + kickHistories.Count);
+
+                foreach (var kvp in f.TaggedUsers) {
+                    string uid = kvp.Key;
+                    BasicUserInfo info = kvp.Value;
+
+                    if (!FilterBasicUserInfo(info))
+                        continue;
+
+                    BanInfo? ban = null;
+                    bans.TryGetValue(uid, out ban);
+                    KickHistory? kicks = null;
+                    kickHistories.TryGetValue(uid, out kicks);
+
+                    uidsSeen.Add(uid);
+                    userInfos.Add(f.UserInfoToFrontend(uid, info, ban, kicks, f.IsAuthorizedExec(c)));
+                }
+
+                foreach (var ban in bans) {
+                    string uid = ban.Key;
+                    if (uidsSeen.Contains(uid))
+                        continue;
+                    BasicUserInfo info = f.Server.UserData.Load<BasicUserInfo>(uid);
+
+                    if (!FilterBasicUserInfo(info))
+                        continue;
+
+                    KickHistory? kicks = null;
+                    kickHistories.TryGetValue(uid, out kicks);
+
+                    uidsSeen.Add(uid);
+                    userInfos.Add(f.UserInfoToFrontend(uid, info, ban.Value, kicks, f.IsAuthorizedExec(c)));
+                }
+
+                foreach (var kicks in kickHistories) {
+                    string uid = kicks.Key;
+                    if (uidsSeen.Contains(uid))
+                        continue;
+                    BasicUserInfo info = f.Server.UserData.Load<BasicUserInfo>(uid);
+
+                    if (!FilterBasicUserInfo(info))
+                        continue;
+
+                    BanInfo? ban = null;
+                    bans.TryGetValue(uid, out ban);
+
+                    uidsSeen.Add(uid);
+                    userInfos.Add(f.UserInfoToFrontend(uid, info, ban, kicks.Value, f.IsAuthorizedExec(c)));
+                }
+
+                f.RespondJSON(c, userInfos.Skip(from).Take(count).ToArray());
+                return;
+            } else {
+                using UserDataBatchContext ctx = f.Server.UserData.OpenBatch();
+
+                string[] uids = f.Server.UserData.GetAll();
+
+                if (from + count > uids.Length)
+                    count = uids.Length - from;
+
+                f.RespondJSON(c, uids.Select(uid => {
+                    BasicUserInfo info = f.Server.UserData.Load<BasicUserInfo>(uid);
+
+                    if (!FilterBasicUserInfo(info))
+                        return null;
+                    BanInfo ban = f.Server.UserData.Load<BanInfo>(uid);
+                    KickHistory kicks = f.Server.UserData.Load<KickHistory>(uid);
+                    return f.UserInfoToFrontend(uid, info, ban, kicks, f.IsAuthorizedExec(c));
+                }).Where(o => o != null).Skip(from).Take(count).ToArray());
+            }
+
+            return;
         }
 
         [RCEndpoint(false, "/players", null, null, "Player List", "Basic player list.")]
@@ -349,7 +447,9 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             if (!f.IsAuthorized(c))
                 channels = channels.Where(c => !c.IsPrivate);
             f.RespondJSON(c, channels.Select(c => new {
-                c.ID, c.Name, c.IsPrivate,
+                c.ID,
+                c.Name,
+                c.IsPrivate,
                 Players = c.Players.Select(p => p.SessionID).ToArray()
             }).ToArray());
         }
@@ -401,12 +501,17 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                 }
             }
 
+            CelesteNetServerModule? module = null;
             CelesteNetServerModuleSettings? settings;
+
             if (moduleID == "CelesteNet.Server") {
                 settings = f.Server.Settings;
             } else {
-                lock (f.Server.Modules)
-                    settings = f.Server.Modules.FirstOrDefault(m => m.Wrapper.ID == moduleID)?.GetSettings();
+                lock (f.Server.Modules) {
+                    module = f.Server.Modules.FirstOrDefault(m => m.Wrapper.ID == moduleID);
+                    settings = module?.GetSettings();
+                }
+
             }
 
             if (settings == null) {
@@ -421,7 +526,12 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                 try {
                     using (StreamReader sr = new(c.Request.InputStream, Encoding.UTF8, false, 1024, true))
                         settings.Load(sr);
-                    settings.Save();
+                    if (module != null) {
+                        // necessary to trigger subclass overrides of this like in SqliteModule
+                        module.SaveSettings();
+                    } else {
+                        settings.Save();
+                    }
                     f.RespondJSON(c, new {
                         Info = "Success."
                     });
@@ -481,7 +591,6 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             }
         }
 
-#if NETCORE
         [RCEndpoint(true, "/exec", "", "", "Execute C#", "Run some C# code. Highly dangerous!")]
         public static void Exec(Frontend f, HttpRequestEventArgs c) {
             if (!f.IsAuthorizedExec(c)) {
@@ -490,7 +599,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                 return;
             }
 
-            ExecALC? alc = null;
+            AssemblyLoadContext? alc = null;
 
             try {
                 string name = $"CelesteNet.Server.FrontendModule.REPL.{Guid.NewGuid().ToString().Replace("-", "")}";
@@ -535,7 +644,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
 
                 ms.Seek(0, SeekOrigin.Begin);
 
-                alc = new(name);
+                alc = new AssemblyLoadContext(name, isCollectible: true);
                 alc.Resolving += (ctx, name) => {
                     foreach (CelesteNetServerModuleWrapper wrapper in f.Server.ModuleWrappers)
                         if (wrapper.ID == name.Name)
@@ -564,18 +673,131 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             }
         }
 
-        private class ExecALC : AssemblyLoadContext {
 
-            public ExecALC(string name)
-                : base(name, isCollectible: true) {
+        [RCEndpoint(true, "/processavatar", "?uid={uid}&overwrite={true|false}", "", "Re-process Avatar", "Create a 64x64 round user avatar PNG.")]
+        public static void ProcessAvatar(Frontend f, HttpRequestEventArgs c) {
+            NameValueCollection args = f.ParseQueryString(c.Request.RawUrl);
+
+            string? uid = args["uid"];
+            if (uid.IsNullOrEmpty()) {
+                c.Response.StatusCode = (int) HttpStatusCode.BadRequest;
+                f.RespondJSON(c, new {
+                    Error = "No UID."
+                });
+                return;
             }
 
-            protected override Assembly? Load(AssemblyName name) {
-                return null;
+            Stream? data = f.Server.UserData.ReadFile(uid, "avatar.orig.png");
+
+            if (data == null) {
+                c.Response.StatusCode = (int) HttpStatusCode.NotFound;
+                f.RespondJSON(c, new {
+                    Error = "Not found."
+                });
+                return;
             }
 
+            bool overwrite = false;
+            bool.TryParse(args["overwrite"], out overwrite);
+
+            if (!f.IsAuthorizedExec(c) && overwrite) {
+                c.Response.StatusCode = (int) HttpStatusCode.Unauthorized;
+                f.Respond(c, "Not authorized to overwrite!");
+                return;
+            }
+
+            using (Image avatarOrig = Image.Load<Rgba32>(data))
+            using (Image avatarScale = avatarOrig.Clone(x => x.Resize(64, 64, sampler: KnownResamplers.Lanczos3)))
+            using (Image avatarFinal = avatarScale.Clone(x => x.ApplyRoundedCorners())) {
+
+                if (overwrite) {
+
+                    using (Stream s = f.Server.UserData.WriteFile(uid, "avatar.orig.png"))
+                        avatarScale.SaveAsPng(s, new PngEncoder() { ColorType = PngColorType.RgbWithAlpha });
+
+                    using (Stream s = f.Server.UserData.WriteFile(uid, "avatar.png"))
+                        avatarFinal.SaveAsPng(s, new PngEncoder() { ColorType = PngColorType.RgbWithAlpha });
+                }
+                using MemoryStream stream = new();
+
+                avatarFinal.SaveAsPng(stream, new PngEncoder() { ColorType = PngColorType.RgbWithAlpha });
+
+                c.Response.ContentType = "image/png";
+                f.RespondContent(c, stream);
+            }
         }
-#endif
 
+        [RCEndpoint(true, "/processallavatars", "?overwrite={true|false}", "", "Re-process all Avatar", "")]
+        public static void ProcessAllAvatars(Frontend f, HttpRequestEventArgs c) {
+            NameValueCollection args = f.ParseQueryString(c.Request.RawUrl);
+
+            if (!f.IsAuthorizedExec(c)) {
+                c.Response.StatusCode = (int) HttpStatusCode.Unauthorized;
+                f.Respond(c, "Unauthorized!");
+                return;
+            }
+
+            bool overwrite = false;
+            bool.TryParse(args["overwrite"], out overwrite);
+
+            string[] uids = f.Server.UserData.GetRegistered();
+            foreach (string uid in uids) {
+                ImageInfo info;
+
+                using (Stream? data = f.Server.UserData.ReadFile(uid, "avatar.png")) {
+                    if (data == null)
+                        continue;
+
+                    try {
+                        info = Image.Identify(data);
+                    } catch (UnknownImageFormatException e) {
+                        Logger.Log(LogLevel.INF, "frontend", $"Could not identify avatar: {uid}");
+                        continue;
+                    }
+                }
+
+                try {
+                    if ((info?.Metadata?.TryGetPngMetadata(out var pngMetadata) ?? false) && pngMetadata.ColorType != PngColorType.RgbWithAlpha) {
+                        Logger.Log(LogLevel.INF, "frontend", $"Non-RGBA png avatar: {uid} = {pngMetadata.ColorType}");
+
+                        if (overwrite) {
+                            Logger.Log(LogLevel.INF, "frontend", $"({uid}) Attempting to re-process avatar...");
+
+                            Image avatarOrig;
+                            using (Stream? data = f.Server.UserData.ReadFile(uid, "avatar.orig.png")) {
+                                if (data == null)
+                                    continue;
+
+                                avatarOrig = Image.Load<Rgba32>(data);
+                            }
+
+                            if (avatarOrig == null)
+                                continue;
+
+                            Logger.Log(LogLevel.INF, "frontend", $"({uid}) Loaded avatar.orig.png...");
+
+                            using (Image avatarScale = avatarOrig.Clone(x => x.Resize(64, 64, sampler: KnownResamplers.Lanczos3)))
+                            using (Image avatarFinal = avatarScale.Clone(x => x.ApplyRoundedCorners())) {
+                                Logger.Log(LogLevel.INF, "frontend", $"({uid}) Processing done, saving...");
+
+                                using (Stream s = f.Server.UserData.WriteFile(uid, "avatar.orig.png"))
+                                    avatarScale.SaveAsPng(s, new PngEncoder() { ColorType = PngColorType.RgbWithAlpha });
+
+                                Logger.Log(LogLevel.INF, "frontend", $"({uid}) Saved avatar.orig.png.");
+
+                                using (Stream s = f.Server.UserData.WriteFile(uid, "avatar.png"))
+                                    avatarFinal.SaveAsPng(s, new PngEncoder() { ColorType = PngColorType.RgbWithAlpha });
+
+                                Logger.Log(LogLevel.INF, "frontend", $"({uid}) Saved avatar.png. ");
+                            }
+                        }
+                    }
+
+                } catch (UnknownImageFormatException e) {
+                    Logger.Log(LogLevel.INF, "frontend", $"Could not decode avatar: {uid} = {e}");
+                }
+            }
+            f.Respond(c, "Success");
+        }
     }
 }

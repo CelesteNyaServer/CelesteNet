@@ -1,14 +1,6 @@
-﻿using Celeste.Mod.CelesteNet.DataTypes;
-using Mono.Options;
-using MonoMod.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+using Celeste.Mod.CelesteNet.DataTypes;
 
 namespace Celeste.Mod.CelesteNet.Server {
     public class Channels : IDisposable {
@@ -43,15 +35,28 @@ namespace Celeste.Mod.CelesteNet.Server {
         }
 
         public bool SessionStartupMove(CelesteNetPlayerSession session) {
-            if (Server.UserData.TryLoad(session.UID, out LastChannelUserInfo last) &&
-                last.Name != NameDefault) {
-                (Channel curr, Channel prev) = Move(session, last.Name);
-                return curr != prev;
-            } else {
-                Default.Add(session);
-                OnMove?.Invoke(session, null, Default);
-                BroadcastList();
+            if (Server.UserData.TryLoad(session.UID, out LastChannelUserInfo last) && last.Name != NameDefault) {
+                try {
+                    (Channel curr, Channel prev) = Move(session, last.Name);
+                    return curr != prev;
+                } catch (Exception e) {
+                    if (e.GetType() == typeof(Exception)) {
+                        if (!Server.UserData.GetKey(session.UID).IsNullOrEmpty()) {
+                            // Tried to re-join invalid channel somehow, reset LastChannelUserInfo to "main" (NameDefault)
+                            Server.UserData.Save(session.UID, new LastChannelUserInfo {
+                                Name = NameDefault
+                            });
+                        }
+                        // from here, this path should fall through to end of function to properly join main
+                    } else {
+                        throw;
+                    }
+                }
             }
+
+            Default.Add(session);
+            OnMove?.Invoke(session, null, Default);
+            BroadcastList();
             return false;
         }
 
@@ -109,10 +114,15 @@ namespace Celeste.Mod.CelesteNet.Server {
 
         public Tuple<Channel, Channel> Move(CelesteNetPlayerSession session, string name) {
             name = name.Sanitize();
+
             if (name.Length > Server.Settings.MaxChannelNameLength)
                 name = name.Substring(0, Server.Settings.MaxChannelNameLength);
-            if (name == NamePrivate)
+
+            if (name == NamePrivate || name == PrefixPrivate)
                 throw new Exception("Invalid private channel name.");
+
+            if (string.IsNullOrWhiteSpace(name))
+                throw new Exception("Invalid channel name.");
 
             lock (All) {
                 Channel prev = session.Channel;

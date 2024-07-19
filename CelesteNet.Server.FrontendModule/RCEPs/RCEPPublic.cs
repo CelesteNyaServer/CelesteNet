@@ -1,25 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Celeste.Mod.CelesteNet.DataTypes;
 using Celeste.Mod.CelesteNet.Server.Chat;
 using Newtonsoft.Json;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Drawing;
+using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 using WebSocketSharp.Net;
 using WebSocketSharp.Server;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Drawing.Drawing2D;
-
-#if NETCORE
-using System.Runtime.Loader;
-#endif
 
 namespace Celeste.Mod.CelesteNet.Server.Control {
     public static partial class RCEndpoints {
@@ -131,44 +124,24 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                     using Stream s = client.GetAsync(
                         $"https://cdn.discordapp.com/avatars/{uid}/{userData.avatar.ToString()}.png?size=64"
                     ).Await().Content.ReadAsStreamAsync().Await();
-                    avatarOrig = Image.FromStream(s);
+                    avatarOrig = Image.Load<Rgba32>(s);
                 } catch {
                     using Stream s = client.GetAsync(
                         $"https://cdn.discordapp.com/embed/avatars/{((int) userData.discriminator) % 6}.png"
                     ).Await().Content.ReadAsStreamAsync().Await();
-                    avatarOrig = Image.FromStream(s);
+                    avatarOrig = Image.Load(s);
                 }
             }
-            using (avatarOrig)
-            using (Bitmap avatarScale = new(64, 64, PixelFormat.Format32bppArgb))
-            using (Bitmap avatarFinal = new(64, 64, PixelFormat.Format32bppArgb)) {
-                using (Graphics g = Graphics.FromImage(avatarScale)) {
-                    g.SmoothingMode = SmoothingMode.AntiAlias;
 
-                    g.DrawImage(avatarOrig, 0, 0, 64, 64);
-                }
+            using (avatarOrig)
+            using (Image avatarScale = avatarOrig.Clone(x => x.Resize(64, 64, sampler: KnownResamplers.Lanczos3)))
+            using (Image avatarFinal = avatarScale.Clone(x => x.ApplyRoundedCorners().ApplyTagOverlays(f, info))) {
 
                 using (Stream s = f.Server.UserData.WriteFile(uid, "avatar.orig.png"))
-                    avatarScale.Save(s, ImageFormat.Png);
-
-                using (Graphics g = Graphics.FromImage(avatarFinal)) {
-                    g.SmoothingMode = SmoothingMode.AntiAlias;
-
-                    using (TextureBrush tbr = new(avatarScale))
-                        g.FillEllipse(tbr, 0, 0, 64, 64);
-
-                    foreach (string tagName in info.Tags) {
-                        using Stream? asset = f.OpenContent($"frontend/assets/tags/{tagName}.png", out _, out _, out _);
-                        if (asset == null)
-                            continue;
-
-                        using Image tag = Image.FromStream(asset);
-                        g.DrawImageUnscaled(tag, 0, 0);
-                    }
-                }
+                    avatarScale.SaveAsPng(s, new PngEncoder() { ColorType = PngColorType.RgbWithAlpha });
 
                 using (Stream s = f.Server.UserData.WriteFile(uid, "avatar.png"))
-                    avatarFinal.Save(s, ImageFormat.Png);
+                    avatarFinal.SaveAsPng(s, new PngEncoder() { ColorType = PngColorType.RgbWithAlpha });
             }
 
             c.Response.StatusCode = (int) HttpStatusCode.Redirect;
@@ -178,6 +151,47 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
             f.RespondJSON(c, new {
                 Info = "Success - redirecting to /"
             });
+        }
+
+        private static IImageProcessingContext ApplyTagOverlays(this IImageProcessingContext context, Frontend f, BasicUserInfo info) {
+            foreach (string tagName in info.Tags) {
+                using Stream? asset = f.OpenContent($"frontend/assets/tags/{tagName}.png", out _, out _, out _);
+                if (asset == null)
+                    continue;
+
+                using Image tag = Image.Load(asset);
+                context.DrawImage(tag, 1.0f);
+            }
+
+            return context;
+        }
+
+        // These functions copied from ImageSharp's Samples code -- https://github.com/SixLabors/Samples/blob/main/ImageSharp/AvatarWithRoundedCorner/Program.cs
+
+        // This method can be seen as an inline implementation of an `IImageProcessor`:
+        // (The combination of `IImageOperations.Apply()` + this could be replaced with an `IImageProcessor`)
+        private static IImageProcessingContext ApplyRoundedCorners(this IImageProcessingContext context) {
+            Size size = context.GetCurrentSize();
+
+            GraphicsOptions oldGO = context.GetGraphicsOptions();
+
+            context.SetGraphicsOptions(new GraphicsOptions() {
+                Antialias = true,
+
+                // Enforces that any part of this shape that has color is punched out of the background
+                AlphaCompositionMode = PixelAlphaCompositionMode.DestOut
+            });
+
+            IPath rect = new RectangularPolygon(0, 0, size.Width, size.Height);
+            rect = rect.Clip(new EllipsePolygon(size.Width / 2, size.Height / 2, size.Width / 2));
+
+            // Mutating in here as we already have a cloned original
+            // use any color (not Transparent), so the corners will be clipped
+            context = context.Fill(Color.Red, rect);
+
+            context.SetGraphicsOptions(oldGO);
+
+            return context;
         }
 
         [RCEndpoint(false, "/userinfo", "?uid={uid}&key={keyIfNoUID}", "", "User Info", "Get some basic user info.")]
@@ -256,6 +270,39 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
 
             f.RespondJSON(c, new {
                 Info = "Key revoked."
+            });
+        }
+
+        [RCEndpoint(false, "/resetuserdata", "?key={key}", "", "Reset User Data", "Reset/remove extra bits of info stored about the user.")]
+        public static void ResetUserData(Frontend f, HttpRequestEventArgs c) {
+            NameValueCollection args = f.ParseQueryString(c.Request.RawUrl);
+
+            string? key = args["key"];
+            if (key.IsNullOrEmpty())
+                key = f.TryGetKeyCookie(c) ?? "";
+            if (key.IsNullOrEmpty()) {
+                c.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                f.RespondJSON(c, new {
+                    Error = "Unauthorized - no key."
+                });
+                return;
+            }
+
+            string uid = f.Server.UserData.GetUID(key);
+            if (uid.IsNullOrEmpty()) {
+                c.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                f.RespondJSON(c, new {
+                    Error = "Unauthorized - invalid key."
+                });
+                return;
+            }
+
+            f.Server.UserData.Delete<LastChannelUserInfo>(uid);
+            f.Server.UserData.Delete<ChatModule.UserChatSettings>(uid);
+            f.Server.UserData.Delete<Chat.Cmd.TPSettings>(uid);
+
+            f.RespondJSON(c, new {
+                Info = "Data reset."
             });
         }
 
