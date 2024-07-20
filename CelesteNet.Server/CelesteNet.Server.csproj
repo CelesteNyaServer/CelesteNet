@@ -32,7 +32,6 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 
     <PackageReference Include="Microsoft.AspNetCore.StaticFiles" Version="2.2.0" />
-    <PackageReference Include="System.Drawing.Common" Version="8.0.7" />
     <PackageReference Include="Microsoft.CodeAnalysis.Compilers" Version="4.8.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.8.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
@@ -43,6 +42,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
 
     <Reference Include="websocket-sharp-customheaders.dll" HintPath="..\lib\websocket-sharp-customheaders.dll" />
   </ItemGroup>

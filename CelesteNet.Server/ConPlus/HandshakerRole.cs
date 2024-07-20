@@ -235,16 +235,16 @@ Connection: close
 
                 headers.TryGetValue("CelesteNet-ClientVersion", out string? clientVersion);
 
-                const string expectedVersion = "3.2.0-dev";
+                const string expectedVersion = "3.2.0";
                 if (clientVersion != expectedVersion)
                 {
-                    if (clientVersion != "3.1.8")
+                    if (clientVersion != "3.2.0")
                     {
                         await writer.WriteAsync(
 $@"HTTP/1.1 403 Access Denied
 Connection: close
 
-Client is so Old. Need Client Version 3.1.8!"
+客户端过期 需要更新! 最新版本:"+expectedVersion
     .Trim().Replace("\r\n", "\n").Replace("\n", "\r\n")
 );
                         return null;
@@ -252,13 +252,13 @@ Client is so Old. Need Client Version 3.1.8!"
                 }
                 else
                 {
-                    if (clientVersion != "3.1.8")
+                    if (clientVersion != "3.2.0")
                     {
                         await writer.WriteAsync(
 $@"HTTP/1.1 403 Access Denied
 Connection: close
 
-Client is so Old. Need Client Version 3.1.8!"
+客户端过期 需要更新! 最新版本:" + expectedVersion
     .Trim().Replace("\r\n", "\n").Replace("\n", "\r\n")
 );
                         return null;
