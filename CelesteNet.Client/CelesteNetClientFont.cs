@@ -6,9 +6,9 @@ namespace Celeste.Mod.CelesteNet.Client
     // Copy of ActiveFont that always uses the English font.
     public static class CelesteNetClientFont
     {
-        public static PixelFont Font => Fonts.Load(Dialog.Languages["schinese"].FontFace);
+        public static PixelFont Font => Fonts.Get(Dialog.Languages["schinese"].FontFace);
 
-        public static PixelFont FontEN => Fonts.Load(Dialog.Languages["english"].FontFace);
+        public static PixelFont FontEN => Fonts.Get(Dialog.Languages["english"].FontFace);
 
         public static PixelFontSize FontSize => Font.Get(BaseSize);
 
@@ -25,7 +25,7 @@ namespace Celeste.Mod.CelesteNet.Client
 
         public static Vector2 Measure(string text)
         {
-            if (IfUseEnFont(text))
+            if (ShouldUseENFont(text))
                 return FontSizeEN.Measure(text);
             else
                 return FontSize.Measure(text);
@@ -37,7 +37,7 @@ namespace Celeste.Mod.CelesteNet.Client
         public static float HeightOf(string text)
             => FontSize.HeightOf(text);
 
-        private static bool IfUseEnFont(string text)
+        private static bool ShouldUseENFont(string text)
         {
             if (!CelesteNetClientModule.Settings.UseENFontWhenPossible) return false;
 
@@ -55,7 +55,7 @@ namespace Celeste.Mod.CelesteNet.Client
 
         private static void Draw(string text, Vector2 position, Vector2 justify, Vector2 scale, Color color, float edgeDepth, Color edgeColor, float stroke, Color strokeColor)
         {
-            if (IfUseEnFont(text))
+            if (ShouldUseENFont(text))
                 FontEN.Draw(BaseSizeEN, text, position, justify, scale, color, edgeDepth, edgeColor, stroke, strokeColor);
             else
                 Font.Draw(BaseSize, text, position, justify, scale, color, edgeDepth, edgeColor, stroke, strokeColor);
