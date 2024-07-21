@@ -238,31 +238,14 @@ Connection: close
                 const string expectedVersion = "3.2.0";
                 if (clientVersion != expectedVersion)
                 {
-                    if (clientVersion != "3.2.0")
-                    {
-                        await writer.WriteAsync(
+                    await writer.WriteAsync(
 $@"HTTP/1.1 403 Access Denied
 Connection: close
 
-客户端过期 需要更新! 最新版本:"+expectedVersion
-    .Trim().Replace("\r\n", "\n").Replace("\n", "\r\n")
+{string.Format(Server.Settings.MessageOutdatedVersion, clientVersion, expectedVersion)}" 
+.Trim().Replace("\r\n", "\n").Replace("\n", "\r\n")
 );
-                        return null;
-                    }
-                }
-                else
-                {
-                    if (clientVersion != "3.2.0")
-                    {
-                        await writer.WriteAsync(
-$@"HTTP/1.1 403 Access Denied
-Connection: close
-
-客户端过期 需要更新! 最新版本:" + expectedVersion
-    .Trim().Replace("\r\n", "\n").Replace("\n", "\r\n")
-);
-                        return null;
-                    }
+                    return null;
                 }
                 
                 // Get the list of supported connection features
