@@ -320,7 +320,7 @@ namespace Celeste.Mod.CelesteNet.Client {
             if (!string.IsNullOrEmpty(info.FullName))
                 info.UpdateDisplayName(!Options.AvatarsDisabled);
             else
-                info.DisplayName = null;
+                info.DisplayName = "";
             return true;
         }
 
