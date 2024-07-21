@@ -44,6 +44,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 MainThreadHelper.Schedule(() => {
                     Emoji.Register(ID, GFX.Misc["whiteCube"]);
                     Emoji.Fill(CelesteNetClientFont.Font);
+                    Emoji.Fill(CelesteNetClientFont.FontEN);
                 });
             }
 
@@ -53,6 +54,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                     MainThreadHelper.Schedule(() => {
                         Emoji.Register(ID, GFX.Misc["whiteCube"]);
                         Emoji.Fill(CelesteNetClientFont.Font);
+                        Emoji.Fill(CelesteNetClientFont.FontEN);
                     });
                 }
             }
@@ -124,6 +126,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                             Content.Registered.Add(asset.ID);
                             Emoji.Register(asset.ID, tex);
                             Emoji.Fill(CelesteNetClientFont.Font);
+                            Emoji.Fill(CelesteNetClientFont.FontEN);
 
                             // find the corresponding DataPlayerInfo (perhaps DataNetEmoji should hold a Ref)
                             string[] splitID = netemoji.ID.Split('_');
@@ -148,7 +151,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             // catch missing avatars - "restoring" these happens in Handle above when the avatar is fully received
             string avatar = $"celestenet_avatar_{info.ID}_";
             if (!Emoji.Registered.Contains(avatar)) {
-                info.DisplayName = info.DisplayName.Replace($":{avatar}:", AvatarMissing);
+                    info.DisplayName = info.DisplayName.Replace($":{avatar}:", AvatarMissing);
                 info.UpdateDisplayName(true);
             }
             return true;
