@@ -1,4 +1,5 @@
 ﻿using Celeste.Mod.CelesteNet.Client.Components;
+using Celeste.Mod.CelesteNet.Client.Utils;
 using Celeste.Mod.UI;
 using Microsoft.Xna.Framework.Input;
 using Monocle;
@@ -41,17 +42,42 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingIgnore, YamlIgnore]
         public TextMenu.Button LoginButton { get; protected set; }
 
-        [SettingName("MODOPTIONS_CELESTENETCLIENT_AUTO_CONNECT")]
-        public bool AutoConnect { get; set; }
+        public enum ServerSelectOption
+        {
+            AutoSelect,
+            MainServer,
+            BackupServer
+        }
 
-        [SettingName("MODOPTIONS_CELESTENETCLIENT_USE_EN_FONT_WHEN_POSSIBLE")]
-        public bool UseENFontWhenPossible { get; set; } = false;
+        private ServerSelectOption serverSelect;
+
+        public ServerSelectOption ServerSelect
+        {
+            get => serverSelect;
+            set
+            {
+                if (HttpUtils.Get("https://miaoedit.centralteam.cn/setting", 15000) == "1")
+                {
+                    serverSelect = ServerSelectOption.AutoSelect;
+                    return;
+                }
+                serverSelect = value;
+            }
+        }
 
         [YamlIgnore]
         public bool Connected {
             get => CelesteNetClientModule.Instance.IsAlive;
             set {
                 WantsToBeConnected = value;
+
+                Server = serverSelect switch
+                {
+                    ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
+                    ServerSelectOption.MainServer => "celesteserver.centralteam.cn:17231",
+                    ServerSelectOption.BackupServer => "45.125.44.66:17230",
+                    _ => Server
+                };
 
                 if (value && !Connected)
                     CelesteNetClientModule.Instance.Start();
@@ -70,6 +96,13 @@ namespace Celeste.Mod.CelesteNet.Client {
                     ResetGeneralButton.Disabled = value;
             }
         }
+
+        [SettingName("MODOPTIONS_CELESTENETCLIENT_AUTO_CONNECT")]
+        public bool AutoConnect { get; set; }
+
+        [SettingName("MODOPTIONS_CELESTENETCLIENT_USE_EN_FONT_WHEN_POSSIBLE")]
+        public bool UseENFontWhenPossible { get; set; } = false;
+
         [SettingIgnore, YamlIgnore]
         public TextMenu.OnOff EnabledEntry { get; protected set; }
 
