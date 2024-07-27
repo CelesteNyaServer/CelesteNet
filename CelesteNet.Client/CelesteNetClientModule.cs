@@ -12,6 +12,7 @@ using Celeste.Mod.CelesteNet.DataTypes;
 using Celeste.Mod.Helpers;
 using FMOD.Studio;
 using Monocle;
+using MonoMod.Cil;
 using MonoMod.Utils;
 
 namespace Celeste.Mod.CelesteNet.Client
@@ -106,6 +107,17 @@ namespace Celeste.Mod.CelesteNet.Client
                 Logger.LogDetailedException(ex);
             }
             On.Celeste.OuiMainMenu.Enter += OuiMainMenu_Enter;
+            IL.Celeste.GameLoader.LoadThread += GameLoader_LoadThread;
+        }
+
+        private void GameLoader_LoadThread(ILContext il)
+        {
+            ILCursor cur = new(il);
+            if (cur.TryGotoNext(ins => ins.MatchLdstr("english")))
+            {
+                cur.EmitDelegate(() => Fonts.Load(Dialog.Languages["schinese"].FontFace));
+                cur.EmitPop();
+            }
         }
 
         private IEnumerator OuiMainMenu_Enter(On.Celeste.OuiMainMenu.orig_Enter orig, OuiMainMenu self, Oui from)
@@ -130,7 +142,8 @@ namespace Celeste.Mod.CelesteNet.Client
         public override void LoadContent(bool firstLoad)
         {
             Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule LoadContent ({firstLoad})");
-            MainThreadHelper.Schedule(() => {
+            MainThreadHelper.Schedule(() =>
+            {
                 UIRenderTarget?.Dispose();
                 UIRenderTarget = VirtualContent.CreateRenderTarget("celestenet-hud-target", 1922, 1082, false, true, 0);
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule LoadContent created RT");
@@ -150,6 +163,7 @@ namespace Celeste.Mod.CelesteNet.Client
             UIRenderTarget = null;
 
             On.Celeste.OuiMainMenu.Enter -= OuiMainMenu_Enter;
+            IL.Celeste.GameLoader.LoadThread -= GameLoader_LoadThread;
         }
 
         public override void LoadSettings()
@@ -378,7 +392,8 @@ namespace Celeste.Mod.CelesteNet.Client
 
             lastDisconnectReason = null;
 
-            lock (ClientLock) {
+            lock (ClientLock)
+            {
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: old ctx: {Context} {Context?.IsDisposed}");
                 CelesteNetClientContext oldCtx = Context;
                 if (oldCtx?.IsDisposed ?? false)
@@ -391,7 +406,8 @@ namespace Celeste.Mod.CelesteNet.Client
                 if (oldCtx != null)
                 {
                     Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: ContextLast wasn't null");
-                    MainThreadHelper.Schedule(() => {
+                    MainThreadHelper.Schedule(() =>
+                    {
                         foreach (CelesteNetGameComponent comp in oldCtx.Components.Values)
                             comp.Disconnect(true);
                     });
@@ -467,8 +483,10 @@ namespace Celeste.Mod.CelesteNet.Client
                 catch (Exception e)
                 {
                     bool handled = false;
-                    for (Exception ie = e; ie != null; ie = ie.InnerException) {
-                        if (ie is ConnectionErrorCodeException ceee) {
+                    for (Exception ie = e; ie != null; ie = ie.InnerException)
+                    {
+                        if (ie is ConnectionErrorCodeException ceee)
+                        {
                             Logger.Log(LogLevel.CRI, "clientmod", $"Connection error:\n{e}");
                             _StartThread = null;
                             Stop();
