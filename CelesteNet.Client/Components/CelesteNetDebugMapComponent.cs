@@ -64,7 +64,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         #region Handlers
 
         public void Handle(CelesteNetConnection con, DataPlayerInfo player) {
-            if (player.ID == Client.PlayerInfo.ID || LastArea == null)
+            if (player.ID == Client?.PlayerInfo?.ID || LastArea == null)
                 return;
 
             lock (Ghosts)
