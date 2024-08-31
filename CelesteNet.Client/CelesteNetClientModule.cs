@@ -107,17 +107,6 @@ namespace Celeste.Mod.CelesteNet.Client
                 Logger.LogDetailedException(ex);
             }
             On.Celeste.OuiMainMenu.Enter += OuiMainMenu_Enter;
-            IL.Celeste.GameLoader.LoadThread += GameLoader_LoadThread;
-        }
-
-        private void GameLoader_LoadThread(ILContext il)
-        {
-            ILCursor cur = new(il);
-            if (cur.TryGotoNext(ins => ins.MatchLdstr("english")))
-            {
-                cur.EmitDelegate(() => Fonts.Load(Dialog.Languages["schinese"].FontFace));
-                cur.EmitPop();
-            }
         }
 
         private IEnumerator OuiMainMenu_Enter(On.Celeste.OuiMainMenu.orig_Enter orig, OuiMainMenu self, Oui from)
@@ -163,7 +152,6 @@ namespace Celeste.Mod.CelesteNet.Client
             UIRenderTarget = null;
 
             On.Celeste.OuiMainMenu.Enter -= OuiMainMenu_Enter;
-            IL.Celeste.GameLoader.LoadThread -= GameLoader_LoadThread;
         }
 
         public override void LoadSettings()
