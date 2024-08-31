@@ -6,7 +6,14 @@ namespace Celeste.Mod.CelesteNet.Client
     // Copy of ActiveFont that always uses the English font.
     public static class CelesteNetClientFont
     {
-        public static PixelFont Font => Fonts.Get(Dialog.Languages["schinese"].FontFace);
+        public static PixelFont Font
+        {
+            get
+            {
+                string face = Dialog.Languages["schinese"].FontFace;
+                return Fonts.Get(face) ?? Fonts.Load(face);
+            }
+        }
 
         public static PixelFont FontEN => Fonts.Get(Dialog.Languages["english"].FontFace);
 
