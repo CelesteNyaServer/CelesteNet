@@ -70,11 +70,11 @@ namespace Celeste.Mod.CelesteNet.Server.Utils
             }
             string filePath = "temp/" + fileName + ".png";
 
-            if (File.Exists(filePath))
+            /*if (File.Exists(filePath))
             {
                 Logger.Log(LogLevel.VVV, "Avater", "Cache Exists");
                 return filePath;
-            }
+            }*/
 
             WebRequest webRequest = WebRequest.Create(url);
             WebResponse webResponse = webRequest.GetResponse();

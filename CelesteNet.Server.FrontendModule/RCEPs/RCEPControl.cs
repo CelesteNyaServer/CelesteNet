@@ -257,8 +257,8 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                     TickRate = f.Server.CurrentTickRate,
 
                     f.Server.PlayerCounter,
-                    Registered = f.Server.UserData.GetRegisteredCount(),
-                    Banned = f.Server.UserData.LoadAll<BanInfo>().Values.GroupBy(ban => ban.UID).Select(g => g.First()).Count(ban => !ban.Reason.IsNullOrEmpty()),
+                    //Registered = f.Server.UserData.GetRegisteredCount(),
+                   // Banned = f.Server.UserData.LoadAll<BanInfo>().Values.GroupBy(ban => ban.UID).Select(g => g.First()).Count(ban => !ban.Reason.IsNullOrEmpty()),
 
                     Connections = auth ? NumCons : (int?) null,
                     TCPConnections = auth ? NumTCPCons : (int?) null,
