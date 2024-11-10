@@ -343,7 +343,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                 if (search.IsNullOrEmpty())
                     return true;
 
-                if (info.Name.Contains(search, StringComparison.InvariantCultureIgnoreCase))
+                if (info.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
                     return true;
 
                 return false;
@@ -750,7 +750,7 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
 
                     try {
                         info = Image.Identify(data);
-                    } catch (UnknownImageFormatException e) {
+                    } catch (UnknownImageFormatException) {
                         Logger.Log(LogLevel.INF, "frontend", $"Could not identify avatar: {uid}");
                         continue;
                     }

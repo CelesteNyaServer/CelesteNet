@@ -29,6 +29,12 @@ CelesteNet-ClientVersion: {CelesteNetClientModule.Instance.Metadata.VersionStrin
 ");
 
             foreach (FieldInfo field in typeof(CelesteNetClientOptions).GetFields(BindingFlags.Public | BindingFlags.Instance)) {
+                object optionValue = field.GetValue(options);
+
+                if (field.FieldType.IsEnum) {
+                    optionValue = Convert.ChangeType(optionValue, Enum.GetUnderlyingType(field.FieldType));
+                }
+
                 switch (Type.GetTypeCode(field.FieldType)) {
                     case TypeCode.Boolean:
                     case TypeCode.Int16:
@@ -39,7 +45,7 @@ CelesteNet-ClientVersion: {CelesteNetClientModule.Instance.Metadata.VersionStrin
                     case TypeCode.UInt64:
                     case TypeCode.Single:
                     case TypeCode.Double: {
-                        reqBuilder.AppendLine($"CelesteNet-ClientOptions-{field.Name}: {field.GetValue(options)}");
+                        reqBuilder.AppendLine($"CelesteNet-ClientOptions-{field.Name}: {optionValue}");
                     } break;
                 }
             }
@@ -49,8 +55,8 @@ CelesteNet-ClientVersion: {CelesteNetClientModule.Instance.Metadata.VersionStrin
 
             // Read the "HTTP" response
             string statusLine = netStream.UnbufferedReadLine();
-            string[] statusSegs = statusLine.Split(new[] { ' ' }, 3);
-            if (statusSegs.Length != 3)
+            string[] statusSegs = statusLine?.Split(new[] { ' ' }, 3);
+            if (statusSegs?.Length != 3)
                 throw new InvalidDataException($"Invalid HTTP response status line: '{statusLine}'");
             int statusCode = int.Parse(statusSegs[1]);
 

@@ -93,6 +93,10 @@ namespace Celeste.Mod.CelesteNet.Server {
             Server.Data.RegisterHandlersIn(this);
         }
 
+        public bool CheckClientFeatureSupport(CelesteNetSupportedClientFeatures features) {
+            return ClientOptions.SupportedClientFeatures.HasFlag(features);
+        }
+
         public T? Get<T>(object ctx) where T : class {
             if (!Alive) {
                 Logger.Log(LogLevel.INF, "playersession", $"Early return on attempt to 'Get<{typeof(T)}>' when session is already !Alive");
@@ -154,8 +158,8 @@ namespace Celeste.Mod.CelesteNet.Server {
             Logger.Log(LogLevel.VVV, "playersession", $"Startup #{SessionID} @ {DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond} - Startup");
 
             string? clientDisconnectReason = null;
-            if (Server.Settings.ClientChecks && Con is ConPlusTCPUDPConnection cpCon)
-                clientDisconnectReason = ConnFeatureUtils.ClientCheck(cpCon);
+            if (Server.Settings.ClientChecks && Con is ConPlusTCPUDPConnection cpCon && cpCon.GetAssociatedData<ExtendedHandshake.ConnectionData>() is ExtendedHandshake.ConnectionData extConData)
+                clientDisconnectReason = ExtendedHandshake.ClientCheck(cpCon, extConData);
 
             if (clientDisconnectReason != null) {
                 Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} disconnecting because ClientCheck returned: '{clientDisconnectReason}'");
@@ -261,7 +265,7 @@ namespace Celeste.Mod.CelesteNet.Server {
             playerInfo.Meta = playerInfo.GenerateMeta(Server.Data);
             Server.Data.SetRef(playerInfo);
 
-            Logger.Log(LogLevel.INF, "playersession", $"Session #{SessionID} PlayerInfo: {playerInfo}");
+            Logger.Log(LogLevel.INF, "playersession", $"Session #{SessionID} PlayerInfo: {playerInfo} (UID: {UID}; Con: {Con.UID})");
             Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} @ {DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond}");
 
             // Send packets to players
@@ -433,7 +437,11 @@ namespace Celeste.Mod.CelesteNet.Server {
                 authExec = info.Tags.Contains(BasicUserInfo.TAG_AUTH_EXEC);
             }
 
-            filteredCommands.List = commands.List.Where(cmd => (!cmd.Auth || auth) && (!cmd.AuthExec || authExec)).ToArray();
+            filteredCommands.List = commands.List.Where(cmd => {
+                    return (!cmd.Auth || auth)
+                    && (!cmd.AuthExec || authExec)
+                    && CheckClientFeatureSupport(cmd.RequiredFeatures);
+                }).ToArray();
 
             Con.Send(filteredCommands);
         }
@@ -444,7 +452,7 @@ namespace Celeste.Mod.CelesteNet.Server {
             if (Interlocked.Exchange(ref _Alive, 0) <= 0)
                 return;
 
-            Logger.Log(LogLevel.INF, "playersession", $"Shutdown #{SessionID} {Con}");
+            Logger.Log(LogLevel.INF, "playersession", $"Shutdown #{SessionID} {Con} (Session UID: {UID}; PlayerInfo: {PlayerInfo})");
 
             DataPlayerInfo? playerInfoLast = PlayerInfo;
 
