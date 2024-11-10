@@ -135,7 +135,7 @@ namespace Celeste.Mod.CelesteNet.Client
             CelesteNetModule = (EverestModule)Activator.CreateInstance(FakeAssembly.GetFakeEntryAssembly().GetType("Celeste.Mod.NullModule"), new EverestModuleMetadata
             {
                 Name = "CelesteNet.Client",
-                VersionString = "2.2.2"
+                VersionString = "2.3.1"
             });
             Everest.Register(CelesteNetModule);
             try
