@@ -1,13 +1,11 @@
-﻿using Microsoft.Xna.Framework;
-using Monocle;
-using System;
+﻿using System;
+using Microsoft.Xna.Framework;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.ObjectFactories;
 
-namespace Celeste.Mod.CelesteNet
-{
+namespace Celeste.Mod.CelesteNet {
     // Based off of Everest's YamlHelper.
     public static class YamlHelper {
 
@@ -47,7 +45,7 @@ namespace Celeste.Mod.CelesteNet
             => type == typeof(Color);
 
         public object ReadYaml(IParser parser, Type type) {
-            if (parser.TryConsume(out MappingStart _)) {
+            if (parser.TryConsume<MappingStart>(out _)) {
                 Color c = new(0, 0, 0, 255);
                 do {
                     switch (parser.Consume<Scalar>().Value.ToUpperInvariant()) {
@@ -67,11 +65,11 @@ namespace Celeste.Mod.CelesteNet
                             c.A = byte.Parse(parser.Consume<Scalar>().Value);
                             break;
                     }
-                } while (!parser.TryConsume(out MappingEnd _));
+                } while (!parser.TryConsume<MappingEnd>(out _));
                 return c;
             }
 
-            return Calc.HexToColor(parser.Consume<Scalar>().Value);
+            return ColorHelpers.HexToColor(parser.Consume<Scalar>().Value);
         }
 
         public void WriteYaml(IEmitter emitter, object? value, Type type) {

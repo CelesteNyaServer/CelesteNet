@@ -7,6 +7,9 @@ using System.Threading;
 using Celeste.Mod.CelesteNet.DataTypes;
 
 namespace Celeste.Mod.CelesteNet.Client {
+
+    using cIDSendMode = CelesteNetClientSettings.ClientIDSendMode;
+
     public class CelesteNetClient : IDisposable {
 
         public readonly CelesteNetClientSettings Settings;
@@ -51,16 +54,30 @@ namespace Celeste.Mod.CelesteNet.Client {
             Options.ClientID = Settings.ClientID;
             Options.InstanceID = Settings.InstanceID;
 
+            Options.SupportedClientFeatures |= CelesteNetSupportedClientFeatures.LocateCommand;
+
+            bool isServerLocalhost = Settings.Host == "localhost" || Settings.Host == "127.0.0.1";
+
+            if (Settings.ClientIDSending == cIDSendMode.Off || (Settings.ClientIDSending == cIDSendMode.NotOnLocalhost && isServerLocalhost))
+                Options.ClientID = 0;
+
             Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClient created");
 
             Data = new();
+
+            Logger.Log(LogLevel.INF, "data", "Rescanning all data types");
+            Data.IDToDataType.Clear();
+            Data.DataTypeToID.Clear();
+
+            Data.RescanDataTypes(CelesteNetClientModule.GetTypes());
+
             Data.RegisterHandlersIn(this);
 
             _ReadyEvent = new(false);
 
             // Find connection features
             List<IConnectionFeature> conFeatures = new();
-            foreach (Type type in CelesteNetUtils.GetTypes()) {
+            foreach (Type type in CelesteNetClientModule.GetTypes()) {
                 try {
                     if (!typeof(IConnectionFeature).IsAssignableFrom(type) || type.IsAbstract)
                         continue;

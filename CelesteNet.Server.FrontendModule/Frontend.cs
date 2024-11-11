@@ -269,15 +269,8 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
                 player.UDPUplinkPpS = pCon?.UDPSendRate.PacketRate;
             }
 
-            if (pCon?.ConnFeatureData.Count > 0) {
-                /*
-                var x = (IDictionary<string, object>)player;
-                foreach (var kvp in pCon.ConnFeatureData) {
-                    x[kvp.Key] = kvp.Value;
-                }
-                */
-                player.ConnInfo = new Dictionary<string, string>(pCon.ConnFeatureData);
-            }
+            if (pCon?.GetAssociatedData<ExtendedHandshake.ConnectionData>() is ExtendedHandshake.ConnectionData conData && conData.CheckEntriesValid)
+                player.ExtHandshakeCheckValues = new Dictionary<string, string>(conData.CheckEntries);
 
             return player;
         }

@@ -1,4 +1,4 @@
-﻿using Celeste.Mod.CelesteNet.Client.Components;
+using Celeste.Mod.CelesteNet.Client.Components;
 using Celeste.Mod.CelesteNet.Client.Utils;
 using Celeste.Mod.UI;
 using Microsoft.Xna.Framework.Input;
@@ -25,7 +25,7 @@ namespace Celeste.Mod.CelesteNet.Client {
         public int Version {
             get => SettingsVersionDoNotEdit;
             set {
-                if (SettingsVersionDoNotEdit < value && value <= SettingsVersionCurrent)
+                if (SettingsVersionDoNotEdit <= value && value <= SettingsVersionCurrent)
                     SettingsVersionDoNotEdit = value;
                 else
                     Logger.LogDetailed(LogLevel.WRN, "CelesteNetClientSettings", $"Attempt to change Settings.Version from {SettingsVersionDoNotEdit} to {value} which is not allowed!");
@@ -79,10 +79,14 @@ namespace Celeste.Mod.CelesteNet.Client {
                     _ => Server
                 };
 
-                if (value && !Connected)
+                if (value && !Connected) {
+                    if (!CelesteNetClientModule.Instance.MayReconnect && !(CelesteNetClientModule.Instance.AnyContext?.Client?.IsAlive ?? false))
+                        CelesteNetClientModule.Instance.AnyContext?.Status?.Set("Reconnect delayed...", 3f, true, false);
                     CelesteNetClientModule.Instance.Start();
-                else if (!value && Connected)
+                }
+                else if (!value && Connected) {
                     CelesteNetClientModule.Instance.Stop();
+                }
 
                 if (!value && EnabledEntry != null && Engine.Scene != null)
                     Engine.Scene.OnEndOfFrame += () => EnabledEntry?.LeftPressed();
@@ -94,6 +98,8 @@ namespace Celeste.Mod.CelesteNet.Client {
                     ExtraServersEntry.Disabled = value;
                 if (ResetGeneralButton != null)
                     ResetGeneralButton.Disabled = value;
+                if (ConnectLocallyButton != null)
+                    ConnectLocallyButton.Disabled = value;
             }
         }
 
@@ -106,6 +112,27 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingIgnore, YamlIgnore]
         public TextMenu.OnOff EnabledEntry { get; protected set; }
 
+        // A button that only shows when the "visible" bool below gets set, to easily allow connecting back to official server
+        [SettingIgnore, YamlIgnore]
+        public TextMenu.Button ConnectDefaultButton { get; protected set; }
+        [SettingIgnore, YamlIgnore]
+        public TextMenuExt.EaseInSubHeaderExt ConnectDefaultButtonHint { get; protected set; }
+
+        private bool _ConnectDefaultVisible = false;
+        [SettingIgnore, YamlIgnore]
+        public bool ConnectDefaultVisible {
+            get => _ConnectDefaultVisible;
+            set {
+                if (ConnectDefaultButton != null)
+                    ConnectDefaultButton.Visible = value;
+
+                if (_ConnectDefaultVisible != value && ConnectDefaultButtonHint != null)
+                    ConnectDefaultButtonHint.FadeVisible = value;
+
+                _ConnectDefaultVisible = value;
+            }
+        }
+
         public bool AutoReconnect { get; set; } = true;
         [SettingIgnore, YamlIgnore]
         public TextMenu.OnOff AutoReconnectEntry { get; protected set; }
@@ -115,6 +142,15 @@ namespace Celeste.Mod.CelesteNet.Client {
         public TextMenu.OnOff ReceivePlayerAvatarsEntry { get; protected set; }
 
         public const string DefaultServer = "celesteserver.centralteam.cn";
+
+        [SettingIgnore, YamlIgnore]
+        public string EffectiveServer {
+            get => ServerOverride.IsNullOrEmpty() ? Server : ServerOverride;
+            private set {
+                Server = value;
+            }
+        }
+
 #if DEBUG
         [SettingSubHeader("modoptions_celestenetclient_subheading_general")]
 #else
@@ -129,12 +165,43 @@ namespace Celeste.Mod.CelesteNet.Client {
 
                 _Server = value;
 
-                if (ServerEntry != null)
-                    ServerEntry.Label = "modoptions_celestenetclient_server".DialogClean().Replace("((server))", value);
+                UpdateServerInDialogs();
             }
         }
         private string _Server = DefaultServer;
 
+        // Any non-empty string will override Server property temporarily. (setting not saved)
+        // Currently only used for "connect locally" button (for Nucleus etc.)
+        [SettingIgnore, YamlIgnore]
+        public string ServerOverride {
+            get => _ServerOverride;
+            set {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    _ServerOverride = "";
+                } else {
+                    _ServerOverride = value;
+                }
+                UpdateServerInDialogs();
+            }
+        }
+
+        // best way I can come up with to do this in various places, rather than a lot of erratic logic in Server & ServerOverride setters
+        public void UpdateServerInDialogs() {
+            if (ServerEntry != null)
+                ServerEntry.Label = "modoptions_celestenetclient_server".DialogClean().Replace("((server))", EffectiveServer);
+
+            if (EnabledEntry != null)
+                EnabledEntry.Label = "modoptions_celestenetclient_connected".DialogClean().Replace("((server))", EffectiveServer);
+
+            if (ConnectDefaultButton != null)
+                ConnectDefaultButton.Label = "modoptions_celestenetclient_connectdefault".DialogClean().Replace("((default))", DefaultServer);
+
+            if (ConnectDefaultButtonHint != null)
+                ConnectDefaultButtonHint.Title = "modoptions_celestenetclient_connectdefaulthint".DialogClean().Replace("((server))", EffectiveServer);
+        }
+
+        private string _ServerOverride = "";
 
         [SettingIgnore, YamlIgnore]
         public TextMenu.Button ServerEntry { get; protected set; }
@@ -208,6 +275,12 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         [SettingIgnore, YamlIgnore]
         public uint InstanceID { get; set; } = 0;
+
+        [SettingIgnore]
+        public ClientIDSendMode ClientIDSending { get; set; } = ClientIDSendMode.NotOnLocalhost;
+
+        [SettingIgnore, YamlIgnore]
+        public TextMenu.Button ConnectLocallyButton { get; protected set; }
 
         [SettingIgnore, YamlIgnore]
         public TextMenu.Button ResetGeneralButton { get; protected set; }
@@ -757,7 +830,7 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingIgnore, YamlIgnore]
         public string Host {
             get {
-                string server = Server?.ToLowerInvariant();
+                string server = EffectiveServer?.ToLowerInvariant();
                 int indexOfPort;
                 if (!string.IsNullOrEmpty(server) &&
                     (indexOfPort = server.LastIndexOf(':')) != -1 &&
@@ -770,7 +843,7 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingIgnore, YamlIgnore]
         public int Port {
             get {
-                string server = Server;
+                string server = EffectiveServer;
                 int indexOfPort;
                 if (!string.IsNullOrEmpty(server) &&
                     (indexOfPort = server.LastIndexOf(':')) != -1 &&
@@ -792,8 +865,7 @@ namespace Celeste.Mod.CelesteNet.Client {
             return item;
         }
 
-
-        public TextMenu.Button CreateMenuButton(TextMenu menu, string dialogLabel, Func<string, string>? dialogTransform, Action onPress)
+        public TextMenu.Button CreateMenuButton(TextMenu menu, string dialogLabel, Func<string, string> dialogTransform, Action onPress)
         {
             string label = $"modoptions_celestenetclient_{dialogLabel}".DialogClean();
             TextMenu.Button item = new TextMenu.Button(dialogTransform?.Invoke(label) ?? label);
@@ -823,8 +895,7 @@ namespace Celeste.Mod.CelesteNet.Client {
             LoginButton.Disabled = Connected;
         }
 
-
-        public TextMenu.Button CreateMenuStringInput(TextMenu menu, string dialogLabel, Func<string, string>? dialogTransform, int maxValueLength, Func<string> currentValue, Action<string> newValue) {
+        public TextMenu.Button CreateMenuStringInput(TextMenu menu, string dialogLabel, Func<string, string> dialogTransform, int maxValueLength, Func<string> currentValue, Action<string> newValue) {
             string label = $"modoptions_celestenetclient_{dialogLabel}".DialogClean();
             TextMenu.Button item = new TextMenu.Button(dialogTransform?.Invoke(label) ?? label);
             item.Pressed(() => {
@@ -841,7 +912,7 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         public void CreateConnectedEntry(TextMenu menu, bool inGame) {
             menu.Add(
-                (EnabledEntry = new TextMenu.OnOff("modoptions_celestenetclient_connected".DialogClean(), Connected))
+                (EnabledEntry = new TextMenu.OnOff("modoptions_celestenetclient_connected".DialogClean().Replace("((server))", EffectiveServer), Connected))
                 .Change(v => Connected = v)
             );
             EnabledEntry.AddDescription(menu, "modoptions_celestenetclient_connectedhint".DialogClean());
@@ -849,7 +920,7 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         public void CreateServerEntry(TextMenu menu, bool inGame) {
 #if DEBUG
-            ServerEntry = CreateMenuStringInput(menu, "SERVER", s => s.Replace("((server))", Server), 30, () => Server, newVal => Server = newVal);
+            ServerEntry = CreateMenuStringInput(menu, "SERVER", s => s.Replace("((server))", EffectiveServer), 30, () => EffectiveServer, newVal => EffectiveServer = newVal);
             ServerEntry.Disabled = inGame || Connected;
             ServerEntry.AddDescription(menu, "modoptions_celestenetclient_devonlyhint".DialogClean());
 #endif
@@ -865,6 +936,7 @@ namespace Celeste.Mod.CelesteNet.Client {
         }
         public void CreateKeyEntry(TextMenu menu, bool inGame)
         {
+            KeyError = KeyErrors.None;
             KeyEntry = CreateMenuStringInput(menu, "KEY", s => s.Replace("((key))", Key.Length > 0 ? KeyDisplayDialog(KeyError) : "-"), 17, () => Key, newVal => Key = newVal);
             KeyEntry.AddDescription(menu, "modoptions_celestenetclient_keyhint".DialogClean());
             SetKeyEntryDisabled(inGame || Connected || _loginMode != LoginModeType.Key);
@@ -909,7 +981,6 @@ namespace Celeste.Mod.CelesteNet.Client {
         }
 
         public void CreateExtraServersEntry(TextMenu menu, bool inGame) {
-#if DEBUG
             int selected = 0;
             for (int i = 0; i < ExtraServers.Length; i++)
                 if (ExtraServers[i] == Server)
@@ -946,6 +1017,8 @@ namespace Celeste.Mod.CelesteNet.Client {
                 ExtraServersEntry.Visible = ExtraServers.Length > 0;
             });
             item.AddDescription(menu, "modoptions_celestenetclient_reloadhint".DialogClean());
+#if !DEBUG
+            item.Visible = ExtraServers.Length > 0;
 #endif
         }
 
@@ -972,9 +1045,21 @@ namespace Celeste.Mod.CelesteNet.Client {
                 AutoReconnect = true;
                 ReceivePlayerAvatars = true;
                 ClientID = GenerateClientID();
+                ServerOverride = "";
+                KeyError = KeyErrors.None;
+                ConnectDefaultVisible = false;
             });
             ResetGeneralButton.AddDescription(menu, "modoptions_celestenetclient_resetgeneralhint".DialogClean());
             ResetGeneralButton.Disabled = Connected;
+        }
+
+        public void CreateConnectLocallyButtonEntry(TextMenu menu, bool inGame) {
+            ConnectLocallyButton = CreateMenuButton(menu, "CONNECTLOCALLY", null, () => {
+                ServerOverride = "localhost";
+                Connected = true;
+            });
+            ConnectLocallyButton.AddDescription(menu, "modoptions_celestenetclient_connectlocallyhint".DialogClean());
+            ConnectLocallyButton.Disabled = Connected;
         }
 
         public void CreateAutoReconnectEntry(TextMenu menu, bool inGame) {
@@ -993,7 +1078,25 @@ namespace Celeste.Mod.CelesteNet.Client {
             ReceivePlayerAvatarsEntry.AddDescription(menu, "modoptions_celestenetclient_avatarshint".DialogClean());
         }
 
-        #endregion
+        public void CreateConnectDefaultButtonEntry(TextMenu menu, bool inGame) {
+            ConnectDefaultButton = CreateMenuButton(menu, "CONNECTDEFAULT", (label) => label.Replace("((default))", DefaultServer), () => {
+                ServerOverride = "";
+                Server = DefaultServer;
+                CelesteNetClientModule.Instance.ResetReconnectPenalty();
+                Connected = true;
+            });
+
+            ConnectDefaultButtonHint = null;
+            ConnectDefaultButton.AddDescription(menu, "modoptions_celestenetclient_connectdefaulthint".DialogClean().Replace("((server))", EffectiveServer));
+
+            int descriptionIndex = menu.Items.IndexOf(ConnectDefaultButton) + 1;
+            if (descriptionIndex > 0 && descriptionIndex < menu.Items.Count && menu.Items[descriptionIndex] is TextMenuExt.EaseInSubHeaderExt desc)
+                ConnectDefaultButtonHint = desc;
+
+            ConnectDefaultButton.Visible = ConnectDefaultVisible;
+        }
+
+#endregion
 
         public static ulong GenerateClientID() {
             return ulong.Parse(Guid.NewGuid().ToString().Replace("-", "").Substring(0, 16), System.Globalization.NumberStyles.HexNumber);
@@ -1022,6 +1125,12 @@ namespace Celeste.Mod.CelesteNet.Client {
             InvalidLength,
             InvalidChars,
             InvalidKey
+        }
+
+        public enum ClientIDSendMode {
+            Off = 0,
+            NotOnLocalhost = 1,
+            On = 2
         }
     }
 

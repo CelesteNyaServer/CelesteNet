@@ -36,6 +36,8 @@ namespace Celeste.Mod.CelesteNet.Client
 
         public CelesteNetClientContext ContextLast;
         public CelesteNetClientContext Context;
+
+        public CelesteNetClientContext AnyContext => Context ?? ContextLast;
         public CelesteNetClient Client => Context?.Client;
         private readonly object ClientLock = new();
 
@@ -44,6 +46,45 @@ namespace Celeste.Mod.CelesteNet.Client
         public bool IsAlive => Context != null;
 
         public DataDisconnectReason lastDisconnectReason;
+
+        // simply tracking when the last connection attempt to server was made
+        public DateTime LastConnectionAttempt { get; private set; } = DateTime.UtcNow;
+        // Repeated connection attempts will incur an incremental delay, this tracks when this started
+        public DateTime ReconnectDelayingSince { get; private set; } = DateTime.UtcNow;
+        // the current wait time in seconds between connection attempts
+        public int ReconnectWaitTime { get; private set; } = 0;
+        // wait time increases only happen after X tries at current delay, so track repeats
+        public int ReconnectWaitRepetitions { get; private set; } = 0;
+        // the delay applied on first reconnect retry
+        public const int FastReconnectPenaltyInitial = 2;
+        // the highest delay that can be reached
+        public const int FastReconnectPenaltyMax = 15;
+        // the delay in seconds that gets added at each increment
+        public const int FastReconnectPenalty = 3;
+        // the amount of retries that happen at each interval before incrementing wait time
+        public const int FastReconnectPenaltyAfter = 2;
+        // the amount of seconds that need to pass without attempts until delay resets
+        public const int FastReconnectResetAfter = 30;
+
+        public bool MayReconnect => (DateTime.UtcNow - LastConnectionAttempt).TotalSeconds > ReconnectWaitTime;
+
+        // currently used to show a warning/reset button to connect to default server again,
+        // when connecting to a different server fails repeatedly
+        private int _FailedReconnectCount = 0;
+        public int FailedReconnectCount {
+            get => _FailedReconnectCount;
+            private set {
+                _FailedReconnectCount = value;
+
+                if (value >= FailedReconnectThreshold && Settings.EffectiveServer != CelesteNetClientSettings.DefaultServer) {
+                    Settings.ConnectDefaultVisible = true;
+                    Settings.WantsToBeConnected = false;
+                }
+                else
+                    Settings.ConnectDefaultVisible = false;
+            }
+        }
+        public const int FailedReconnectThreshold = 3;
 
         public VirtualRenderTarget UIRenderTarget;
 
@@ -94,7 +135,7 @@ namespace Celeste.Mod.CelesteNet.Client
             CelesteNetModule = (EverestModule)Activator.CreateInstance(FakeAssembly.GetFakeEntryAssembly().GetType("Celeste.Mod.NullModule"), new EverestModuleMetadata
             {
                 Name = "CelesteNet.Client",
-                VersionString = "2.2.2"
+                VersionString = "2.3.1"
             });
             Everest.Register(CelesteNetModule);
             try
@@ -373,15 +414,43 @@ namespace Celeste.Mod.CelesteNet.Client
             if (_StartThread?.IsAlive ?? false)
             {
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: StartThread.Join...");
-                _StartThread.Join();
+                _StartThread?.Join();
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: StartThread Join done");
             }
             _StartTokenSource?.Dispose();
 
             lastDisconnectReason = null;
 
-            lock (ClientLock)
-            {
+            if (!Settings.WantsToBeConnected) {
+                Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: WantsToBeConnected has been set to {Settings.WantsToBeConnected}, canceling.");
+                return;
+            }
+
+            // check if wait time still applies
+            if (!MayReconnect) {
+                if (Settings.AutoReconnect) {
+                    Logger.Log(LogLevel.INF, "reconnect-attempt", $"CelesteNetClientModule Start: Waiting {ReconnectWaitTime} seconds before next reconnect...");
+                    QueuedTaskHelper.Do(new Tuple<object, string>(Context, "CelesteNetAutoReconnect"), ReconnectWaitTime, () => {
+                        Logger.Log(LogLevel.DEV, "reconnect-attempt", $"CelesteNetClientContext - QueueTask: Calling instance Start");
+                        Instance.Start();
+                    });
+                }
+                return;
+            } else if (++ReconnectWaitRepetitions > FastReconnectPenaltyAfter || ReconnectWaitTime == FastReconnectPenaltyInitial) {
+                // increasing penalty after N tries, reset counter
+                if (ReconnectWaitTime < FastReconnectPenaltyMax)
+                    ReconnectWaitTime += FastReconnectPenalty + Calc.Random.Next(FastReconnectPenalty);
+                else
+                    ReconnectWaitTime = FastReconnectPenaltyMax;
+                ReconnectWaitRepetitions = 0;
+            }
+            
+            // fully reset wait time
+            if ((DateTime.UtcNow - LastConnectionAttempt).TotalSeconds > FastReconnectResetAfter && ReconnectWaitTime > 0) {
+                ResetReconnectPenalty();
+            }
+
+            lock (ClientLock) {
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: old ctx: {Context} {Context?.IsDisposed}");
                 CelesteNetClientContext oldCtx = Context;
                 if (oldCtx?.IsDisposed ?? false)
@@ -403,6 +472,15 @@ namespace Celeste.Mod.CelesteNet.Client
                 }
 
                 Context.Status.Set("Initializing...");
+            }
+
+            LastConnectionAttempt = DateTime.UtcNow;
+
+            // ReconnectDelayingSince shall track the time when connection attempts started, prior to any delays
+            if (ReconnectWaitTime == 0) {
+                Logger.Log(LogLevel.DBG, "reconnect-attempt", $"CelesteNetClientModule Start: Setting initial reconnect delay from {ReconnectWaitTime} seconds to {FastReconnectPenaltyInitial}... (started {ReconnectDelayingSince})");
+                ReconnectDelayingSince = DateTime.UtcNow;
+                ReconnectWaitTime = FastReconnectPenaltyInitial + Calc.Random.Next(FastReconnectPenaltyInitial);
             }
 
             Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: Creating StartThread...");
@@ -444,25 +522,21 @@ namespace Celeste.Mod.CelesteNet.Client
                         }
                     }
                     context.Status.Set("Connecting...");
-                    using (_StartTokenSource)
-                    {
+
+                    using (_StartTokenSource) {
                         Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule StartThread: Going into context Start...");
                         context.Start(_StartTokenSource.Token);
                     }
                     if (context.Status.Spin)
                         context.Status.Set("Connected", 1f);
 
-                }
-                catch (Exception e) when (e is ThreadInterruptedException || e is OperationCanceledException)
-                {
+                    FailedReconnectCount = 0;
+                } catch (Exception e) when (e is ThreadInterruptedException || e is OperationCanceledException) {
                     Logger.Log(LogLevel.CRI, "clientmod", "Startup interrupted.");
                     _StartThread = null;
                     Stop();
                     context.Status.Set("Interrupted", 3f, false);
-
-                }
-                catch (ThreadAbortException)
-                {
+                } catch (ThreadAbortException) {
                     Logger.Log(LogLevel.VVV, "main", $"Client Start thread: ThreadAbortException caught");
                     _StartThread = null;
                     Stop();
@@ -478,7 +552,8 @@ namespace Celeste.Mod.CelesteNet.Client
                             Logger.Log(LogLevel.CRI, "clientmod", $"Connection error:\n{e}");
                             _StartThread = null;
                             Stop();
-                            context.Status.Set(ceee.Status ?? "Connection failed", 3f, false);
+                            AnyContext.Status.Set(ceee.Status ?? "Connection failed", 3f, false);
+                            Settings.KeyError = CelesteNetClientSettings.KeyErrors.None;
                             if (ceee.StatusCode == 403)
                                 Settings.KeyError = CelesteNetClientSettings.KeyErrors.InvalidKey;
                             handled = true;
@@ -493,6 +568,7 @@ namespace Celeste.Mod.CelesteNet.Client
                         // Instead, dispose the client and let the context do the rest.
                         context.Client.SafeDisposeTriggered = true;
                         context.Status.Set("Connection failed", 3f, false);
+                        FailedReconnectCount++;
                     }
 
                 }
@@ -500,6 +576,7 @@ namespace Celeste.Mod.CelesteNet.Client
                 {
                     _StartThread = null;
                     _StartTokenSource = null;
+                    LastConnectionAttempt = DateTime.UtcNow;
                 }
             })
             {
@@ -531,7 +608,7 @@ namespace Celeste.Mod.CelesteNet.Client
             if (_StartThread?.IsAlive ?? false)
             {
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Stop: Joining StartThread...");
-                _StartThread.Join();
+                _StartThread?.Join();
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Stop: Joining done");
             }
             _StartTokenSource?.Dispose();
@@ -548,6 +625,44 @@ namespace Celeste.Mod.CelesteNet.Client
                 Context.DisposeSafe();
                 Context = null;
             }
+        }
+
+        public static Type[] GetTypes() {
+            if (Everest.Modules.Count != 0)
+                return _GetTypes();
+
+            Type[] typesPrev = _GetTypes();
+        Retry:
+            Type[] types = _GetTypes();
+            if (typesPrev.Length != types.Length) {
+                typesPrev = types;
+                goto Retry;
+            }
+            return types;
+        }
+
+        private static IEnumerable<Assembly> _GetAssemblies()
+            => (Everest.Modules?.Select(m => m.GetType().Assembly) ?? new Assembly[0])
+            .Concat(AppDomain.CurrentDomain.GetAssemblies())
+            .Distinct();
+
+        private static Type[] _GetTypes()
+            => _GetAssemblies().SelectMany(_GetTypes).ToArray();
+
+        private static IEnumerable<Type> _GetTypes(Assembly asm) {
+            try {
+                return asm.GetTypes();
+            } catch (ReflectionTypeLoadException e) {
+#pragma warning disable CS8619 // Compiler thinks this could be <Type?> even though we check for t != null
+                return e.Types.Where(t => t != null);
+#pragma warning restore CS8619
+            }
+        }
+
+        public void ResetReconnectPenalty() {
+            Logger.Log(LogLevel.INF, "reconnect-attempt", $"CelesteNetClientModule Start: Resetting reconnect delay from {ReconnectWaitTime} seconds to 0... (started {ReconnectDelayingSince})");
+            ReconnectWaitTime = 0;
+            ReconnectWaitRepetitions = 0;
         }
 
     }
