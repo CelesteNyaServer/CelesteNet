@@ -20,8 +20,8 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         protected float ScrolledDistance = 0f;
         protected int skippedMsgCount = 0;
 
-        public int InputScrollUpState => Settings.ButtonChatScrollUp.Check ? 1 : 0;
-        public int InputScrollDownState => Settings.ButtonChatScrollDown.Check ? 1 : 0;
+        public int InputScrollUpState => Settings.ButtonChatScrollUp.Check() ? 1 : 0;
+        public int InputScrollDownState => Settings.ButtonChatScrollDown.Check() ? 1 : 0;
 
         public string PromptMessage = "";
         public Color PromptMessageColor = Color.White;
@@ -67,8 +67,8 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             Off
         }
 
-        public MTexture InputScrollUpIcon;
-        public MTexture InputScrollDownIcon;
+        public MTexture InputScrollUpIcon = GFX.Gui["controls/keyboard/oemquestion"];
+        public MTexture InputScrollDownIcon = GFX.Gui["controls/keyboard/oemquestion"];
         public MTexture ArrowUpIcon => GFX.Gui["controls/directions/0x-1"];
         public MTexture ArrowDownIcon => GFX.Gui["controls/directions/0x1"];
         private bool activeController = false;
@@ -270,7 +270,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             }
         }
         protected CompletionType CompletionArgType;
-        protected Atlas CompletionEmoteAtlas;
+        protected Atlas? CompletionEmoteAtlas;
         private PromptMessageTypes PromptMessageType;
 
         private CompletionHiddenBy CompletionHidden = CompletionHiddenBy.None;
@@ -287,7 +287,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             ChatClosePressed
         }
 
-        protected List<VirtualButton> ButtonsToSuppress;
+        protected List<VirtualButton> ButtonsToSuppress = new() { };
 
         public CelesteNetChatComponent(CelesteNetClientContext context, Game game)
             : base(context, game) {
@@ -323,7 +323,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         }
 
         public void Send(string text) {
-            text = text?.Trim();
+            text = text.Trim();
             if (string.IsNullOrEmpty(text))
                 return;
 
@@ -331,7 +331,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 if (Pending.ContainsKey(text))
                     return;
                 DataChat msg = new() {
-                    Player = Client.PlayerInfo,
+                    Player = Client?.PlayerInfo,
                     Text = text
                 };
                 Pending[text] = msg;
@@ -342,11 +342,11 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         }
 
         public void Handle(CelesteNetConnection con, DataChannelList channelList) {
-            if (Client == null)
+            if (Client?.PlayerInfo == null)
                 return;
 
             // stolen homework from CelesteNetPlayerListComponent
-            string tmp = channelList.List.FirstOrDefault(channel => channel.Players.Contains(Client.PlayerInfo.ID))?.Name;
+            string? tmp = channelList.List.FirstOrDefault(channel => channel.Players.Contains(Client.PlayerInfo.ID))?.Name;
             if (tmp == null) return;
             CurrentChannelName = tmp;
         }
@@ -367,7 +367,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             chat.Text = $"{target.FullName} isn't in game or is in another channel.";
 
             // This has to be set, or we will return early
-            DataPlayerState state = null;
+            DataPlayerState? state = null;
             if (Client?.Data?.TryGetBoundRef(target, out state) == false || state == null) return;
 
             if (string.IsNullOrWhiteSpace(state.SID)) {
@@ -377,7 +377,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
 
             CelesteNetLocationInfo location = new(state);
 
-            string locationTitle = location.Name;
+            string locationTitle = location.Name ?? "";
             string iconEmoji = "";
 
             if ((Settings.PlayerListUI.ShowPlayerListLocations & CelesteNetPlayerListComponent.LocationModes.Icons) != 0) {
@@ -475,7 +475,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
 
             _Time += Engine.RawDeltaTime;
 
-            Overworld overworld = Engine.Scene as Overworld;
+            Overworld? overworld = Engine.Scene as Overworld;
             bool isOtherInputFocused = Engine.Scene == null ||
                 Engine.Scene.Entities.FindFirst<KeyboardConfigUI>() != null ||
                 Engine.Scene.Entities.FindFirst<ButtonConfigUI>() != null ||
@@ -491,7 +491,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 Typing = typing;
             }
 
-            if (!Active && !isOtherInputFocused && Settings.ButtonChat.Button.Pressed) {
+            if (!Active && !isOtherInputFocused && Settings.ButtonChat.Pressed()) {
                 Active = true;
 
             } else if (Active) {
@@ -507,7 +507,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 LeftRightRepeatDelay.Update(Engine.RawDeltaTime);
                 DeleteRepeatDelay.Update(Engine.RawDeltaTime);
 
-                if (Settings.ButtonChatSend.Pressed) {
+                if (Settings.ButtonChatSend.Pressed()) {
                     if (!string.IsNullOrWhiteSpace(Typing))
                         Repeat.Insert(1, Typing);
                     Send(Typing);
@@ -576,7 +576,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 } else if (MInput.Keyboard.Pressed(Keys.End)) {
                     CursorIndex = Typing.Length;
 
-                } else if (Settings.ButtonChatClose.Released) {
+                } else if (Settings.ButtonChatClose.Released()) {
                     if (!Settings.ChatUI.ChatCloseCancelsSuggestions || Completion.Count == 0)
                         Active = false;
                     CompletionHidden = CompletionHiddenBy.ChatClosePressed;
@@ -599,9 +599,9 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                             UpdateCompletion(CompletionType.None);
                         } else {
                             // completions for commands or their first parameter
-                            if (Typing.StartsWith("/")) {
+                            if (Typing.StartsWith('/')) {
                                 int firstSpace = Typing.IndexOf(" ");
-                                CommandInfo cmd = firstSpace == -1 ? null : CommandList.FirstOrDefault(cmd => 
+                                CommandInfo? cmd = firstSpace == -1 ? null : CommandList.FirstOrDefault(cmd => 
                                     cmd.ID == Typing.Substring(1, firstSpace - 1)
                                 );
 
@@ -618,7 +618,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                                 }
                             }
 
-                            if (completable.StartsWith(":") && completable.IndexOf(':', 1) == -1
+                            if (completable.StartsWith(':') && completable.IndexOf(':', 1) == -1
                                 && (CompletionArgType == CompletionType.None
                                 || CompletionArgType == CompletionType.Emoji
                                 || (CompletionArgType == CompletionType.Emote && Completion.Count == 0))) {
@@ -693,7 +693,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                     Typing = Typing.Remove(_CursorIndex, CompletionPartial.Length);
 
                     if (CompletionArgType == CompletionType.Command) {
-                        string aliased = CommandList.Where(cmd => cmd.AliasTo == accepted).Select(c => c.ID).FirstOrDefault();
+                        string? aliased = CommandList.Where(cmd => cmd.AliasTo == accepted).Select(c => c.ID).FirstOrDefault();
                         if (!aliased.IsNullOrEmpty())
                             accepted = aliased;
                     }
@@ -712,7 +712,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                         }
                     }
 
-                    if (CompletionArgType != CompletionType.Emote || !accepted.EndsWith("/")) {
+                    if (CompletionArgType != CompletionType.Emote || !accepted.EndsWith('/')) {
                         if (adjustedCursor == Typing.Length || Typing[adjustedCursor] != ' ')
                             accepted += ' ';
                         else if (Typing[adjustedCursor] == ' ')
@@ -789,17 +789,21 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
 
                     break;
                 case CompletionType.Player:
+                    if (Client == null) break;
                     DataPlayerInfo[] all = Client.Data.GetRefs<DataPlayerInfo>();
-
                     Completion = all.Select(p => p.FullName).Where(name => name.StartsWith(partial, StringComparison.OrdinalIgnoreCase)).ToList();
+
                     break;
                 case CompletionType.Channel:
+                    if (Context == null) break;
                     CelesteNetPlayerListComponent playerlist = (CelesteNetPlayerListComponent) Context.Components[typeof(CelesteNetPlayerListComponent)];
-                    IEnumerable<string> channelNames = playerlist?.Channels?.List?.Select(channel => channel.Name);
+                    IEnumerable<string>? channelNames = playerlist.Channels?.List?.Select(channel => channel.Name);
+                    if (channelNames == null || !channelNames.Any()) break;
+
                     if (Settings.PlayerListUI.HideOwnChannelName)
                         // don't accidentally leak the channel name via tab completions
                         channelNames = channelNames.Where(name => name != CurrentChannelName);
-                    Completion = channelNames.Where(name => name.StartsWith(partial, StringComparison.OrdinalIgnoreCase)).ToList() ?? Completion;
+                    Completion = channelNames.Where(name => name.StartsWith(partial, StringComparison.OrdinalIgnoreCase)).ToList();
 
                     break;
 
@@ -864,7 +868,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             }
         }
 
-        protected override void Render(GameTime gameTime, bool toBuffer) {
+        protected override void Render(GameTime? gameTime, bool toBuffer) {
             float scale = Scale;
 
             if (!Active)
@@ -951,7 +955,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                         
                         logLength -= msgExtraLines * 0.75f * (cutoff > 0f ? 1f - cutoff / height : 1f);
 
-                        Context.RenderHelper.Rect(25f * scale, y, size.X + 50f * scale, height - cutoff, Color.Black * CustomAlpha * alpha);
+                        Context?.RenderHelper?.Rect(25f * scale, y, size.X + 50f * scale, height - cutoff, Color.Black * CustomAlpha * alpha);
                         CelesteNetClientFontMono.Draw(
                             time,
                             new(50f * scale, y + 20f * scale),
@@ -1034,15 +1038,17 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
 
         protected void UpdateScrollPromptControls()
         {
-            InputScrollUpIcon = Input.GuiButton(Settings.ButtonChatScrollUp.Button, mode: Input.PrefixMode.Latest);
-            InputScrollDownIcon = Input.GuiButton(Settings.ButtonChatScrollDown.Button, mode: Input.PrefixMode.Latest);
-            ScrollPromptSize.X = ArrowUpIcon.Width + InputScrollUpIcon?.Width ?? 0f;
-            ScrollPromptSize.Y = Math.Max(ArrowUpIcon.Height, InputScrollUpIcon?.Height ?? 0f);
+            if (Settings.ButtonChatScrollUp != null)
+                InputScrollUpIcon = Input.GuiButton(Settings.ButtonChatScrollUp.Button, mode: Input.PrefixMode.Latest);
+            if (Settings.ButtonChatScrollDown != null)
+                InputScrollDownIcon = Input.GuiButton(Settings.ButtonChatScrollDown.Button, mode: Input.PrefixMode.Latest);
+            ScrollPromptSize.X = ArrowUpIcon.Width + InputScrollUpIcon.Width;
+            ScrollPromptSize.Y = Math.Max(ArrowUpIcon.Height, InputScrollUpIcon.Height);
             activeController = Input.GuiInputController();
         }
 
         protected void RenderInputPrompt(Vector2 pos, Vector2 size, float scale, Vector2 fontScale, out float promptWidth) {
-            Context.RenderHelper.Rect(pos.X, pos.Y, size.X, size.Y, Color.Black * 0.8f);
+            Context?.RenderHelper?.Rect(pos.X, pos.Y, size.X, size.Y, Color.Black * 0.8f);
             pos.X += 25f * scale;
             pos.Y += 20f * scale;
 
@@ -1093,22 +1099,19 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         }
 
         protected void RenderScrollPrompt(Vector2 pos, float scale, bool upActive, bool downActive) {
-            Context.RenderHelper.Rect(pos.X, pos.Y, 50f * scale + ScrollPromptSize.X * scale, 2 * ScrollPromptSize.Y * scale, Color.Black * CustomAlpha);
+            Context?.RenderHelper?.Rect(pos.X, pos.Y, 50f * scale + ScrollPromptSize.X * scale, 2 * ScrollPromptSize.Y * scale, Color.Black * CustomAlpha);
             pos.X += 25f * scale;
 
             float oldPosX = pos.X;
 
             // top
-            if (InputScrollUpIcon != null)
-            {
-                InputScrollUpIcon.Draw(
-                    pos,
-                    Vector2.Zero,
-                    upActive ? Color.Goldenrod : Color.White,
-                    scale
-                );
-                pos.X += InputScrollUpIcon.Width * scale;
-            }
+            InputScrollUpIcon.Draw(
+                pos,
+                Vector2.Zero,
+                upActive ? Color.Goldenrod : Color.White,
+                scale
+            );
+            pos.X += InputScrollUpIcon.Width * scale;
 
             ArrowUpIcon.Draw(
                 pos,
@@ -1121,16 +1124,13 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             pos.Y += ScrollPromptSize.Y * scale;
 
             // bottom
-            if (InputScrollDownIcon != null)
-            {
-                InputScrollDownIcon.Draw(
-                    pos,
-                    Vector2.Zero,
-                    downActive ? Color.Goldenrod : Color.White,
-                    scale
-                );
-                pos.X += InputScrollDownIcon.Width * scale;
-            }
+            InputScrollDownIcon.Draw(
+                pos,
+                Vector2.Zero,
+                downActive ? Color.Goldenrod : Color.White,
+                scale
+            );
+            pos.X += InputScrollDownIcon.Width * scale;
 
             ArrowDownIcon.Draw(
                 pos,
@@ -1145,7 +1145,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
 
             for (int i = 0; i < Completion.Count; i++) {
                 string match = Completion[i];
-                string alias = "";
+                string? alias = "";
                 if (CompletionArgType == CompletionType.Command)
                     CommandAliasLookup.TryGetValue(match, out alias);
 
@@ -1198,7 +1198,7 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                     width += sizePrefix.X;
                 }
 
-                Context.RenderHelper.Rect(curPos.X, curPos.Y, width * scale, height * scale, Color.Black * 0.8f);
+                Context?.RenderHelper?.Rect(curPos.X, curPos.Y, width * scale, height * scale, Color.Black * 0.8f);
                 curPos.X += 25f * scale;
 
                 // default colors of the text parts

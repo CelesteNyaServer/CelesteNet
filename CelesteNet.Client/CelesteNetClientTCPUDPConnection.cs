@@ -17,7 +17,7 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         private readonly Stream TCPNetStream, TCPReadStream, TCPWriteStream;
         private readonly Socket UDPSocket;
-        private readonly BlockingCollection<DataType> TCPSendQueue, UDPSendQueue;
+        private readonly BlockingCollection<DataType?> TCPSendQueue, UDPSendQueue;
         private readonly byte[] UDPHandshakeMessage;
 
         private readonly CancellationTokenSource TokenSrc;
@@ -33,7 +33,12 @@ namespace Celeste.Mod.CelesteNet.Client {
             TCPReadStream = new BufferedStream(TCPNetStream);
             TCPWriteStream = new BufferedStream(TCPNetStream);
             UDPSocket = new(tcpSock.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-            UDPSocket.Connect(tcpSock.RemoteEndPoint);
+
+            if (tcpSock.RemoteEndPoint != null) {
+                UDPSocket.Connect(tcpSock.RemoteEndPoint);
+            } else {
+                UseUDP = false;
+            }
 
             OnUDPDeath += (_, _) => {
                 if (!IsAlive)
@@ -123,8 +128,8 @@ namespace Celeste.Mod.CelesteNet.Client {
             UDPQueue.SignalFlushed();
         }
 
-        public override string DoHeartbeatTick() {
-            string disposeReason = base.DoHeartbeatTick();
+        public override string? DoHeartbeatTick() {
+            string? disposeReason = base.DoHeartbeatTick();
             if (disposeReason != null || !IsConnected)
                 return disposeReason;
 
@@ -163,39 +168,54 @@ namespace Celeste.Mod.CelesteNet.Client {
                     TCPHeartbeat();
 
                     // Read the packet
-                    DataType packet;
+                    DataType? packet = null;
+                    bool otherModException = false;
                     using (MemoryStream packetStream = new(packetBuffer, 2, packetSize))
                     using (CelesteNetBinaryReader packetReader = new(Data, Strings, CoreTypeMap, packetStream)) {
-                        packet = Data.Read(packetReader);
-                        if (packetStream.Position != packetSize)
+                        try {
+                            packet = Data.Read(packetReader);
+                        } catch (DataContextException e) {
+                            if (e.OtherMod) {
+                                Logger.LogDetailedException(e?.InnerException ?? e, "client-data-ex");
+                                otherModException = true;
+                            } else if (e.InnerException != null)
+                                throw e.InnerException;
+                            else
+                                throw;
+                        }
+                        if (!otherModException && packetStream.Position != packetSize)
                             throw new InvalidDataException($"Didn't read all data in TCP vdgram ({packetStream.Position} read, {packetSize} total)!");
                     }
 
                     // Handle the packet
-                    switch (packet) {
-                        case DataLowLevelPingRequest pingReq: {
-                            TCPQueue.Enqueue(new DataLowLevelPingReply() {
-                                PingTime = pingReq.PingTime
-                            });
-                            break;
+                    if (packet != null) {
+                        switch (packet) {
+                            case DataLowLevelPingRequest pingReq: {
+                                TCPQueue.Enqueue(new DataLowLevelPingReply() {
+                                    PingTime = pingReq.PingTime
+                                });
+                                break;
+                            }
+                            case DataLowLevelUDPInfo udpInfo: {
+                                HandleUDPInfo(udpInfo);
+                                break;
+                            }
+                            case DataLowLevelStringMap strMap: {
+                                Strings.RegisterWrite(strMap.String, strMap.ID);
+                                break;
+                            }
+                            case DataLowLevelCoreTypeMap coreTypeMap: {
+                                if (coreTypeMap.PacketType != null)
+                                    CoreTypeMap.RegisterWrite(coreTypeMap.PacketType, coreTypeMap.ID);
+                                break;
+                            }
+                            default: {
+                                Receive(packet);
+                                break;
+                            }
                         }
-                        case DataLowLevelUDPInfo udpInfo: {
-                            HandleUDPInfo(udpInfo);
-                            break;
-                        }
-                        case DataLowLevelStringMap strMap: {
-                            Strings.RegisterWrite(strMap.String, strMap.ID);
-                            break;
-                        }
-                        case DataLowLevelCoreTypeMap coreTypeMap: {
-                            if (coreTypeMap.PacketType != null)
-                                CoreTypeMap.RegisterWrite(coreTypeMap.PacketType, coreTypeMap.ID);
-                            break;
-                        }
-                        default: {
-                            Receive(packet);
-                            break;
-                        }
+                    } else {
+                        Logger.Log(LogLevel.WRN, "tcprecv", $"Read null DataType in TCPRecvThreadFunc");
                     }
 
                     // Promote optimizations
@@ -250,22 +270,36 @@ namespace Celeste.Mod.CelesteNet.Client {
 
                             // Read packets until we run out data
                             while (mStream.Position < dgSize - 1) {
-                                DataType packet = Data.Read(reader);
-                                if (packet.TryGet<MetaOrderedUpdate>(Data, out MetaOrderedUpdate orderedUpdate))
+                                DataType? packet = null;
+                                try {
+                                    packet = Data.Read(reader);
+                                } catch (DataContextException e) {
+                                    if (e.OtherMod)
+                                        Logger.LogDetailedException(e?.InnerException ?? e, "client-data-ex");
+                                    else if (e.InnerException != null)
+                                        throw e.InnerException;
+                                    else
+                                        throw;
+                                }
+                                if (packet != null && packet.TryGet<MetaOrderedUpdate>(Data, out MetaOrderedUpdate? orderedUpdate))
                                     orderedUpdate.UpdateID = containerID;
 
                                 // Handle packet
-                                switch (packet) {
-                                    case DataLowLevelPingRequest pingReq: {
-                                        UDPQueue.Enqueue(new DataLowLevelPingReply() {
-                                            PingTime = pingReq.PingTime
-                                        });
-                                        break;
+                                if (packet != null) {
+                                    switch (packet) {
+                                        case DataLowLevelPingRequest pingReq: {
+                                            UDPQueue.Enqueue(new DataLowLevelPingReply() {
+                                                PingTime = pingReq.PingTime
+                                            });
+                                            break;
+                                        }
+                                        default: {
+                                            Receive(packet);
+                                            break;
+                                        }
                                     }
-                                    default: {
-                                        Receive(packet);
-                                        break;
-                                    }
+                                } else {
+                                    Logger.Log(LogLevel.WRN, "udprecv", $"Read null DataType in UDPRecvThreadFunc");
                                 }
                             }
                         }
@@ -302,12 +336,12 @@ namespace Celeste.Mod.CelesteNet.Client {
                 using BinaryWriter tcpWriter = new(TCPWriteStream, Encoding.UTF8, true);
                 using MemoryStream mStream = new(ConnectionSettings.MaxPacketSize);
                 using CelesteNetBinaryWriter bufWriter = new(Data, Strings, CoreTypeMap, mStream);
-                foreach (DataType p in TCPSendQueue.GetConsumingEnumerable(TokenSrc.Token)) {
+                foreach (DataType? p in TCPSendQueue.GetConsumingEnumerable(TokenSrc.Token)) {
                     if (!IsConnected)
                         break;
 
                     // Try to send as many packets as possible
-                    for (DataType packet = p; packet != null; packet = TCPSendQueue.TryTake(out packet) ? packet : null) {
+                    for (DataType? packet = p; packet != null; packet = TCPSendQueue.TryTake(out packet) ? packet : null) {
                         // Handle special packets
                         if (packet is DataInternalDisconnect) {
                             tcpWriter.Flush();
@@ -347,7 +381,7 @@ namespace Celeste.Mod.CelesteNet.Client {
                 byte[] dgBuffer = new byte[UDPBufferSize];
                 using MemoryStream mStream = new(ConnectionSettings.MaxPacketSize);
                 using CelesteNetBinaryWriter bufWriter = new(Data, Strings, CoreTypeMap, mStream);
-                foreach (DataType p in UDPSendQueue.GetConsumingEnumerable(TokenSrc.Token)) {
+                foreach (DataType? p in UDPSendQueue.GetConsumingEnumerable(TokenSrc.Token)) {
                     try {
                         lock (UDPLock) {
                             if (!UseUDP)
@@ -365,7 +399,7 @@ namespace Celeste.Mod.CelesteNet.Client {
                             // Try to send as many packets as possible
                             dgBuffer[0] = NextUDPContainerID();
                             int bufOff = 1;
-                            for (DataType packet = p; packet != null; packet = UDPSendQueue.TryTake(out packet, 0) ? packet : null) {
+                            for (DataType? packet = p; packet != null; packet = UDPSendQueue.TryTake(out packet, 0) ? packet : null) {
                                 mStream.Position = 0;
                                 Data.Write(bufWriter, packet);
                                 bufWriter.Flush();
