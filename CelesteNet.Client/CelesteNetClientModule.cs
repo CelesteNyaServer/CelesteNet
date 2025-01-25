@@ -22,30 +22,30 @@ namespace Celeste.Mod.CelesteNet.Client
 
         public static CelesteNetClientModule Instance;
 
-        private static readonly Type t_OuiDependencyDownloader =
+        private static readonly Type? t_OuiDependencyDownloader =
             typeof(Everest).Assembly
             .GetType("Celeste.Mod.UI.OuiDependencyDownloader");
-        private static readonly FieldInfo f_OuiDependencyDownloader_MissingDependencies =
-            t_OuiDependencyDownloader.GetField("MissingDependencies");
-        private static readonly MethodInfo m_Overworld_Goto_OuiDependencyDownloader =
-            typeof(Overworld).GetMethod("Goto")
-            .MakeGenericMethod(t_OuiDependencyDownloader);
+        private static readonly FieldInfo? f_OuiDependencyDownloader_MissingDependencies =
+            t_OuiDependencyDownloader?.GetField("MissingDependencies");
+        private static readonly MethodInfo? m_Overworld_Goto_OuiDependencyDownloader = 
+            t_OuiDependencyDownloader == null ? null :
+            typeof(Overworld).GetMethod("Goto")?.MakeGenericMethod(t_OuiDependencyDownloader);
 
         public override Type SettingsType => typeof(CelesteNetClientSettings);
         public static CelesteNetClientSettings Settings => (CelesteNetClientSettings)Instance._Settings;
 
-        public CelesteNetClientContext ContextLast;
-        public CelesteNetClientContext Context;
+        public CelesteNetClientContext? ContextLast;
+        public CelesteNetClientContext? Context;
 
-        public CelesteNetClientContext AnyContext => Context ?? ContextLast;
-        public CelesteNetClient Client => Context?.Client;
+        public CelesteNetClientContext? AnyContext => Context ?? ContextLast;
+        public CelesteNetClient? Client => Context?.Client;
         private readonly object ClientLock = new();
 
-        private Thread _StartThread;
-        private CancellationTokenSource _StartTokenSource;
+        private Thread? _StartThread;
+        private CancellationTokenSource? _StartTokenSource;
         public bool IsAlive => Context != null;
 
-        public DataDisconnectReason lastDisconnectReason;
+        public DataDisconnectReason? lastDisconnectReason;
 
         // simply tracking when the last connection attempt to server was made
         public DateTime LastConnectionAttempt { get; private set; } = DateTime.UtcNow;
@@ -86,7 +86,7 @@ namespace Celeste.Mod.CelesteNet.Client
         }
         public const int FailedReconnectThreshold = 3;
 
-        public VirtualRenderTarget UIRenderTarget;
+        public VirtualRenderTarget? UIRenderTarget;
 
         // This should ideally be part of the "emote module" if emotes were a fully separate thing.
         public VirtualJoystick JoystickEmoteWheel;
@@ -116,8 +116,8 @@ namespace Celeste.Mod.CelesteNet.Client
             if (Engine.Commands != null)
             {
                 DynamicData cmds = new(Engine.Commands);
-                cmds.Get<IDictionary>("commands").Clear();
-                cmds.Get<IList>("sorted").Clear();
+                cmds.Get<IDictionary>("commands")?.Clear();
+                cmds.Get<IList>("sorted")?.Clear();
                 cmds.Invoke("BuildCommandsList");
             }
 
@@ -278,7 +278,7 @@ namespace Celeste.Mod.CelesteNet.Client
         public bool LoadOldSettings()
         {
 
-            CelesteNetClientSettingsBeforeVersion2 settingsOld = (CelesteNetClientSettingsBeforeVersion2)typeof(CelesteNetClientSettingsBeforeVersion2).GetConstructor(Type.EmptyTypes).Invoke(Array.Empty<object>());
+            CelesteNetClientSettingsBeforeVersion2? settingsOld = (CelesteNetClientSettingsBeforeVersion2?) typeof(CelesteNetClientSettingsBeforeVersion2).GetConstructor(Type.EmptyTypes)?.Invoke(Array.Empty<object>());
             string path = UserIO.GetSaveFilePath("modsettings-" + Metadata.Name);
 
             if (!File.Exists(path))
@@ -291,10 +291,8 @@ namespace Celeste.Mod.CelesteNet.Client
             {
                 using Stream stream = File.OpenRead(path);
                 using StreamReader input = new StreamReader(stream);
-                YamlHelper.DeserializerUsing(settingsOld).Deserialize(input, typeof(CelesteNetClientSettingsBeforeVersion2));
-            }
-            catch (Exception)
-            {
+                YamlHelper.DeserializerUsing(settingsOld!).Deserialize(input, typeof(CelesteNetClientSettingsBeforeVersion2));
+            } catch (Exception) {
                 Logger.LogDetailed(LogLevel.WRN, "CelesteNetModule", "Failed to load old settings at " + path + " as CelesteNetClientSettingsBeforeVersion2");
                 return false;
             }
@@ -365,9 +363,8 @@ namespace Celeste.Mod.CelesteNet.Client
         {
             base.CreateModMenuSectionHeader(menu, inGame, snapshot);
 
-            CelesteNetModShareComponent sharer = Context?.Get<CelesteNetModShareComponent>();
-            if (sharer != null && !inGame)
-            {
+            CelesteNetModShareComponent? sharer = Context?.Get<CelesteNetModShareComponent>();
+            if (sharer != null && !inGame) {
                 List<EverestModuleMetadata> requested;
                 lock (sharer.Requested)
                     requested = new(sharer.Requested);
@@ -379,8 +376,8 @@ namespace Celeste.Mod.CelesteNet.Client
                     {
                         bool isConnected = Settings.Connected;
                         Settings.Connected = false;
-                        f_OuiDependencyDownloader_MissingDependencies.SetValue(null, requested);
-                        m_Overworld_Goto_OuiDependencyDownloader.Invoke(Engine.Scene, Dummy<object>.EmptyArray);
+                        f_OuiDependencyDownloader_MissingDependencies?.SetValue(null, requested);
+                        m_Overworld_Goto_OuiDependencyDownloader?.Invoke(Engine.Scene, Dummy<object>.EmptyArray);
                         Settings.Connected = isConnected;
                     }));
 
@@ -428,7 +425,7 @@ namespace Celeste.Mod.CelesteNet.Client
 
             // check if wait time still applies
             if (!MayReconnect) {
-                if (Settings.AutoReconnect) {
+                if (Settings.AutoReconnect && Context != null) {
                     Logger.Log(LogLevel.INF, "reconnect-attempt", $"CelesteNetClientModule Start: Waiting {ReconnectWaitTime} seconds before next reconnect...");
                     QueuedTaskHelper.Do(new Tuple<object, string>(Context, "CelesteNetAutoReconnect"), ReconnectWaitTime, () => {
                         Logger.Log(LogLevel.DEV, "reconnect-attempt", $"CelesteNetClientContext - QueueTask: Calling instance Start");
@@ -452,7 +449,7 @@ namespace Celeste.Mod.CelesteNet.Client
 
             lock (ClientLock) {
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: old ctx: {Context} {Context?.IsDisposed}");
-                CelesteNetClientContext oldCtx = Context;
+                CelesteNetClientContext? oldCtx = Context;
                 if (oldCtx?.IsDisposed ?? false)
                     oldCtx = null;
                 Context = new(Celeste.Instance, oldCtx);
@@ -471,7 +468,7 @@ namespace Celeste.Mod.CelesteNet.Client
                     ContextLast = null;
                 }
 
-                Context.Status.Set("Initializing...");
+                Context?.Status?.Set("Initializing...");
             }
 
             LastConnectionAttempt = DateTime.UtcNow;
@@ -484,15 +481,16 @@ namespace Celeste.Mod.CelesteNet.Client
             }
 
             Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Start: Creating StartThread...");
-            _StartThread = new(() =>
-            {
-                CelesteNetClientContext context = Context;
-                try
-                {
+            _StartThread = new(() => {
+                CelesteNetClientContext? context = Context;
+                try {
                     // This shouldn't ever happen but it has happened once.
-                    if (context == null)
-                    {
-                        Logger.Log(LogLevel.WRN, "main", $"CelesteNetClientModule StartThread: 'This shouldn't ever happen but it has happened once.'");
+                    if (context == null) {
+                        Logger.Log(LogLevel.WRN, "main", $"CelesteNetClientModule StartThread context: 'This shouldn't ever happen but it has happened once.'");
+                        return;
+                    }
+                    if (_StartTokenSource == null) {
+                        Logger.Log(LogLevel.WRN, "main", $"CelesteNetClientModule StartThread _StartTokenSource: 'This shouldn't ever happen but it has happened once.'");
                         return;
                     }
                     context.Init(Settings);
@@ -527,15 +525,15 @@ namespace Celeste.Mod.CelesteNet.Client
                         Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule StartThread: Going into context Start...");
                         context.Start(_StartTokenSource.Token);
                     }
-                    if (context.Status.Spin)
-                        context.Status.Set("Connected", 1f);
+                    if (context.Status?.Spin ?? false)
+                        context.Status?.Set("Connected", 1f);
 
                     FailedReconnectCount = 0;
                 } catch (Exception e) when (e is ThreadInterruptedException || e is OperationCanceledException) {
                     Logger.Log(LogLevel.CRI, "clientmod", "Startup interrupted.");
                     _StartThread = null;
                     Stop();
-                    context.Status.Set("Interrupted", 3f, false);
+                    context?.Status?.Set("Interrupted", 3f, false);
                 } catch (ThreadAbortException) {
                     Logger.Log(LogLevel.VVV, "main", $"Client Start thread: ThreadAbortException caught");
                     _StartThread = null;
@@ -545,14 +543,12 @@ namespace Celeste.Mod.CelesteNet.Client
                 catch (Exception e)
                 {
                     bool handled = false;
-                    for (Exception ie = e; ie != null; ie = ie.InnerException)
-                    {
-                        if (ie is ConnectionErrorCodeException ceee)
-                        {
+                    for (Exception? ie = e; ie != null; ie = ie.InnerException) {
+                        if (ie is ConnectionErrorCodeException ceee) {
                             Logger.Log(LogLevel.CRI, "clientmod", $"Connection error:\n{e}");
                             _StartThread = null;
                             Stop();
-                            AnyContext.Status.Set(ceee.Status ?? "Connection failed", 3f, false);
+                            AnyContext?.Status?.Set(ceee.Status ?? "Connection failed", 3f, false);
                             Settings.KeyError = CelesteNetClientSettings.KeyErrors.None;
                             if (ceee.StatusCode == 403)
                                 Settings.KeyError = CelesteNetClientSettings.KeyErrors.InvalidKey;
@@ -566,8 +562,9 @@ namespace Celeste.Mod.CelesteNet.Client
                         Logger.Log(LogLevel.CRI, "clientmod", $"Failed connecting:\n{e}");
                         // Don't stop the context on unhandled connection errors so that it gets a chance to retry.
                         // Instead, dispose the client and let the context do the rest.
-                        context.Client.SafeDisposeTriggered = true;
-                        context.Status.Set("Connection failed", 3f, false);
+                        if (context?.Client != null)
+                            context.Client.SafeDisposeTriggered = true;
+                        context?.Status?.Set("Connection failed", 3f, false);
                         FailedReconnectCount++;
                     }
 
@@ -608,7 +605,7 @@ namespace Celeste.Mod.CelesteNet.Client
             if (_StartThread?.IsAlive ?? false)
             {
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Stop: Joining StartThread...");
-                _StartThread?.Join();
+                _StartThread.Join();
                 Logger.Log(LogLevel.DEV, "lifecycle", $"CelesteNetClientModule Stop: Joining done");
             }
             _StartTokenSource?.Dispose();

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using YamlDotNet.Serialization;
 
 namespace Celeste.Mod.CelesteNet.Server {
