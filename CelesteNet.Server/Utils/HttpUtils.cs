@@ -58,7 +58,7 @@ internal static class HttpUtils
         });
         string filePath = Path.Combine("temp", $"{fileName}.png");
         image.SaveAsPng(filePath);
-        Logger.Log(LogLevel.VVV, "Avatar", $"Cache created for {filePath}");
+        Logger.Log(LogLevel.INF, "Avatar", $"Cache created for {filePath}");
         return filePath;
     }
 }

@@ -436,9 +436,22 @@ Who wants some tea?"
             // Get the player UID and name from the player name-key
             if (nameKey.Length > 1 && nameKey.StartsWith("#"))
             {
-                string key = nameKey.Substring(1);
+                string key = nameKey[1..];
                 Logger.Log(LogLevel.INF, "NetAuth", $"Authing: {key}");
-                var json = HttpUtils.Get($"https://celeste.centralteam.cn/api/celeste/user?access_token={key}");
+                string json;
+
+                FileInfo fi = new(Path.Combine("temp", $"{nameKey}.json"));
+                if (fi.Exists && DateTime.UtcNow - fi.LastWriteTime < TimeSpan.FromHours(2))
+                {
+                    Logger.Log(LogLevel.INF, "NetAuth", $"Using not outdated auth cache of {fi.Name}.");
+                    json = File.ReadAllText(fi.FullName);
+                }
+                else
+                {
+                    json = HttpUtils.Get($"https://celeste.centralteam.cn/api/celeste/user?access_token={key}");
+                    File.WriteAllText(fi.FullName, json);
+                    Logger.Log(LogLevel.INF, "NetAuth", $"Auth cache for {nameKey}.");
+                }
                 NyaNetAuthResult? authResult = JsonSerializer.Deserialize<NyaNetAuthResult>(json);
                 if (authResult == null)
                     return (string.Format(Server.Settings.MessageInvalidKey, nameKey), null);
