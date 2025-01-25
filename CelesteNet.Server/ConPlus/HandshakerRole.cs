@@ -441,7 +441,7 @@ Who wants some tea?"
                 string json;
 
                 FileInfo fi = new(Path.Combine("temp", $"{nameKey}.json"));
-                if (fi.Exists && DateTime.UtcNow - fi.LastWriteTime < TimeSpan.FromHours(2))
+                if (fi.Exists && DateTime.UtcNow - fi.LastWriteTime < TimeSpan.FromMinutes(10))
                 {
                     Logger.Log(LogLevel.INF, "NetAuth", $"Using not outdated auth cache of {fi.Name}.");
                     json = File.ReadAllText(fi.FullName);
@@ -449,8 +449,6 @@ Who wants some tea?"
                 else
                 {
                     json = HttpUtils.Get($"https://celeste.centralteam.cn/api/celeste/user?access_token={key}");
-                    File.WriteAllText(fi.FullName, json);
-                    Logger.Log(LogLevel.INF, "NetAuth", $"Auth cache for {nameKey}.");
                 }
                 NyaNetAuthResult? authResult = JsonSerializer.Deserialize<NyaNetAuthResult>(json);
                 if (authResult == null)
@@ -464,6 +462,11 @@ Who wants some tea?"
                     authResult.AvatarUrl,
                     authResult.Prefix
                     );
+                if (authResult.IsEmailConfirmed != 0)
+                {
+                    File.WriteAllText(fi.FullName, json);
+                    Logger.Log(LogLevel.INF, "NetAuth", $"Auth cache for {nameKey}.");
+                }
                 return (null, playerInfo);
             }
             return (string.Format(Server.Settings.MessageAuthOnly, nameKey), null);
