@@ -43,8 +43,7 @@ internal static class HttpUtils
 
     public static string GetImage(string url, string fileName)
     {
-        if (!Directory.Exists("temp"))
-            Directory.CreateDirectory("temp");
+        Directory.CreateDirectory("temp");
 
         var netStream = httpClient.GetStreamAsync(url).Result;
 

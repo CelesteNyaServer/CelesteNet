@@ -464,6 +464,7 @@ Who wants some tea?"
                     );
                 if (authResult.IsEmailConfirmed != 0)
                 {
+                    Directory.CreateDirectory("temp");
                     File.WriteAllText(fi.FullName, json);
                     Logger.Log(LogLevel.INF, "NetAuth", $"Auth cache for {nameKey}.");
                 }
