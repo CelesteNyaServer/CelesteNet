@@ -10,9 +10,11 @@ using System.Security.Policy;
 using YamlDotNet.Serialization;
 using Keys = Microsoft.Xna.Framework.Input.Keys;
 
-namespace Celeste.Mod.CelesteNet.Client {
+namespace Celeste.Mod.CelesteNet.Client
+{
     [SettingName("modoptions_celestenetclient_title")]
-    public class CelesteNetClientSettings : EverestModuleSettings {
+    public class CelesteNetClientSettings : EverestModuleSettings
+    {
 
         public const int SettingsVersionCurrent = 2;
         // since with this PR (probably going into v2.2) a big chunk of options are being
@@ -22,9 +24,11 @@ namespace Celeste.Mod.CelesteNet.Client {
         // NOTE: The default should be 0 or unset, and not the current version number,
         // because otherwise "unversioned" settings files could not be detected.
         [SettingIgnore, YamlIgnore]
-        public int Version {
+        public int Version
+        {
             get => SettingsVersionDoNotEdit;
-            set {
+            set
+            {
                 if (SettingsVersionDoNotEdit <= value && value <= SettingsVersionCurrent)
                     SettingsVersionDoNotEdit = value;
                 else
@@ -44,9 +48,9 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         public enum ServerSelectOption
         {
-            AutoSelect,
-            MainServer,
-            BackupServer
+            //AutoSelect = 0,
+            MainServer = 0,
+            BackupServer = 1
         }
 
         private ServerSelectOption serverSelect;
@@ -56,35 +60,39 @@ namespace Celeste.Mod.CelesteNet.Client {
             get => serverSelect;
             set
             {
-                if (HttpUtils.Get("https://miaoedit.centralteam.cn/setting", 15000) == "1")
-                {
-                    serverSelect = ServerSelectOption.AutoSelect;
-                    return;
-                }
+                //if (HttpUtils.Get("https://miaoedit.centralteam.cn/setting", 15000) == "1")
+                //{
+                //    serverSelect = ServerSelectOption.AutoSelect;
+                //    return;
+                //}
                 serverSelect = value;
             }
         }
 
         [YamlIgnore]
-        public bool Connected {
+        public bool Connected
+        {
             get => CelesteNetClientModule.Instance.IsAlive;
-            set {
+            set
+            {
                 WantsToBeConnected = value;
 
                 Server = serverSelect switch
                 {
-                    ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
+                    //ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
                     ServerSelectOption.MainServer => "celesteserver.centralteam.cn:17231",
                     ServerSelectOption.BackupServer => "45.125.44.66:17230",
                     _ => Server
                 };
 
-                if (value && !Connected) {
+                if (value && !Connected)
+                {
                     if (!CelesteNetClientModule.Instance.MayReconnect && !(CelesteNetClientModule.Instance.AnyContext?.Client?.IsAlive ?? false))
                         CelesteNetClientModule.Instance.AnyContext?.Status?.Set("Reconnect delayed...", 3f, true, false);
                     CelesteNetClientModule.Instance.Start();
                 }
-                else if (!value && Connected) {
+                else if (!value && Connected)
+                {
                     CelesteNetClientModule.Instance.Stop();
                 }
 
@@ -120,9 +128,11 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         private bool _ConnectDefaultVisible = false;
         [SettingIgnore, YamlIgnore]
-        public bool ConnectDefaultVisible {
+        public bool ConnectDefaultVisible
+        {
             get => _ConnectDefaultVisible;
-            set {
+            set
+            {
                 if (ConnectDefaultButton != null)
                     ConnectDefaultButton.Visible = value;
 
@@ -144,9 +154,11 @@ namespace Celeste.Mod.CelesteNet.Client {
         public const string DefaultServer = "celesteserver.centralteam.cn";
 
         [SettingIgnore, YamlIgnore]
-        public string EffectiveServer {
+        public string EffectiveServer
+        {
             get => ServerOverride.IsNullOrEmpty() ? Server : ServerOverride;
-            private set {
+            private set
+            {
                 Server = value;
             }
         }
@@ -157,9 +169,11 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingIgnore]
 #endif
         [SettingSubText("modoptions_celestenetclient_devonlyhint")]
-        public string Server {
+        public string Server
+        {
             get => _Server;
-            set {
+            set
+            {
                 if (_Server == value)
                     return;
 
@@ -173,13 +187,17 @@ namespace Celeste.Mod.CelesteNet.Client {
         // Any non-empty string will override Server property temporarily. (setting not saved)
         // Currently only used for "connect locally" button (for Nucleus etc.)
         [SettingIgnore, YamlIgnore]
-        public string ServerOverride {
+        public string ServerOverride
+        {
             get => _ServerOverride;
-            set {
+            set
+            {
                 if (string.IsNullOrWhiteSpace(value))
                 {
                     _ServerOverride = "";
-                } else {
+                }
+                else
+                {
                     _ServerOverride = value;
                 }
                 UpdateServerInDialogs();
@@ -187,7 +205,8 @@ namespace Celeste.Mod.CelesteNet.Client {
         }
 
         // best way I can come up with to do this in various places, rather than a lot of erratic logic in Server & ServerOverride setters
-        public void UpdateServerInDialogs() {
+        public void UpdateServerInDialogs()
+        {
             if (ServerEntry != null)
                 ServerEntry.Label = "modoptions_celestenetclient_server".DialogClean().Replace("((server))", EffectiveServer);
 
@@ -216,28 +235,35 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingSubHeader("modoptions_celestenetclient_subheading_general")]
 #endif
         [SettingSubText("modoptions_celestenetclient_loginmodehint")]
-        public LoginModeType LoginMode {
-            get {
+        public LoginModeType LoginMode
+        {
+            get
+            {
                 return _loginMode;
             }
-            set {
+            set
+            {
                 _loginMode = value;
-                switch (value) {
-                    case LoginModeType.Key:
-                        // Enable Key (unless in-game), disable Name input
-                        if (KeyEntry != null)
-                            SetKeyEntryDisabled(!(Engine.Scene is Overworld) || Connected);
-                        break;
+                switch (value)
+                {
+                case LoginModeType.Key:
+                    // Enable Key (unless in-game), disable Name input
+                    if (KeyEntry != null)
+                        SetKeyEntryDisabled(!(Engine.Scene is Overworld) || Connected);
+                    break;
                 }
             }
         }
         private LoginModeType _loginMode = LoginModeType.Key;
 
-        public string Key {
-            get {
+        public string Key
+        {
+            get
+            {
                 return _Key;
             }
-            set {
+            set
+            {
                 value = value.TrimStart('#');
                 KeyError = KeyErrors.None;
                 _Key = "#" + value;
@@ -251,14 +277,17 @@ namespace Celeste.Mod.CelesteNet.Client {
         public TextMenu.Button? KeyEntry { get; protected set; }
 
         [SettingIgnore, YamlIgnore]
-        public string NameKey =>  Key;
+        public string NameKey => Key;
 
         [SettingIgnore, YamlIgnore]
-        public KeyErrors KeyError {
-            get {
+        public KeyErrors KeyError
+        {
+            get
+            {
                 return _KeyError;
             }
-            set {
+            set
+            {
                 _KeyError = value;
                 if (KeyEntry != null)
                     KeyEntry.Label = "modoptions_celestenetclient_key".DialogClean().Replace("((key))", Key.Length > 0 ? KeyDisplayDialog(_KeyError) : "-");
@@ -292,12 +321,14 @@ namespace Celeste.Mod.CelesteNet.Client {
 #if DEBUG
         [SettingSubMenu]
 #endif
-        public class DebugMenu {
+        public class DebugMenu
+        {
             [SettingSubText("modoptions_celestenetclient_devonlyhint")]
             public ConnectionType ConnectionType { get; set; } = ConnectionType.Auto;
 
             [SettingSubText("modoptions_celestenetclient_devonlyhint")]
-            public LogLevel DevLogLevel {
+            public LogLevel DevLogLevel
+            {
                 get => Logger.Level;
                 set => Logger.Level = value;
             }
@@ -310,7 +341,8 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         public InGameMenu InGame { get; set; } = new();
         [SettingSubMenu]
-        public class InGameMenu {
+        public class InGameMenu
+        {
 
             [SettingSubText("modoptions_celestenetclient_interactionshint")]
             public bool Interactions { get; set; } = true;
@@ -328,13 +360,15 @@ namespace Celeste.Mod.CelesteNet.Client {
             [SettingRange(1, 10)]
             public int SoundVolume { get; set; } = 8;
 
-            public void CreateOtherPlayerOpacityEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreateOtherPlayerOpacityEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
-                    new TextMenu.Slider("modoptions_celestenetclient_otherplayeropacity".DialogClean(), i => $"{i*5}%", 0, 20, OtherPlayerOpacity).Change(v => OtherPlayerOpacity = v)
+                    new TextMenu.Slider("modoptions_celestenetclient_otherplayeropacity".DialogClean(), i => $"{i * 5}%", 0, 20, OtherPlayerOpacity).Change(v => OtherPlayerOpacity = v)
                 );
             }
 
-            public void CreateSoundVolumeEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreateSoundVolumeEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
                     new TextMenu.Slider("modoptions_celestenetclient_soundvolume".DialogClean(), i => $"{i * 10}%", 0, 10, SoundVolume).Change(v => SoundVolume = v)
                 );
@@ -342,7 +376,7 @@ namespace Celeste.Mod.CelesteNet.Client {
         }
 
         [SettingIgnore, YamlIgnore]
-        public float OtherPlayerAlpha => InGame.OtherPlayerOpacity/20f;
+        public float OtherPlayerAlpha => InGame.OtherPlayerOpacity / 20f;
 
         #endregion
 
@@ -351,7 +385,8 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         public InGameHUDMenu InGameHUD { get; set; } = new();
         [SettingSubMenu]
-        public class InGameHUDMenu {
+        public class InGameHUDMenu
+        {
 
             public bool ShowOwnName { get; set; } = true;
 
@@ -360,11 +395,14 @@ namespace Celeste.Mod.CelesteNet.Client {
 
             [YamlIgnore]
             private OffScreenModes _OffScreenNames = OffScreenModes.Same;
-            public OffScreenModes OffScreenNames {
-                get {
+            public OffScreenModes OffScreenNames
+            {
+                get
+                {
                     return _OffScreenNames;
                 }
-                set {
+                set
+                {
                     _OffScreenNames = value;
                     if (_OffScreenNameOpacityEntry != null)
                         _OffScreenNameOpacityEntry.Disabled = _OffScreenNames != OffScreenModes.Other;
@@ -380,11 +418,14 @@ namespace Celeste.Mod.CelesteNet.Client {
 
             [YamlIgnore]
             private OffScreenModes _OffScreenEmotes = OffScreenModes.Same;
-            public OffScreenModes OffScreenEmotes {
-                get {
+            public OffScreenModes OffScreenEmotes
+            {
+                get
+                {
                     return _OffScreenEmotes;
                 }
-                set {
+                set
+                {
                     _OffScreenEmotes = value;
                     if (_OffScreenEmoteOpacityEntry != null)
                         _OffScreenEmoteOpacityEntry.Disabled = _OffScreenEmotes != OffScreenModes.Other;
@@ -398,13 +439,15 @@ namespace Celeste.Mod.CelesteNet.Client {
             [SettingRange(1, 12)]
             public int ScreenMargins { get; set; } = 4;
 
-            public void CreateEmoteOpacityEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreateEmoteOpacityEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
                     new TextMenu.Slider("modoptions_celestenetclient_emoteopacity".DialogClean(), i => $"{i * 5}%", 0, 20, EmoteOpacity).Change(v => EmoteOpacity = v)
                 );
             }
 
-            public void CreateOffScreenNameOpacityEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreateOffScreenNameOpacityEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
                     (_OffScreenNameOpacityEntry = new TextMenu.Slider("modoptions_celestenetclient_offscreennameopacity".DialogClean(), i => $"{i * 5}%", 0, 20, OffScreenNameOpacity))
                     .Change(v => OffScreenNameOpacity = v)
@@ -412,7 +455,8 @@ namespace Celeste.Mod.CelesteNet.Client {
                 _OffScreenNameOpacityEntry.Disabled = OffScreenNames != OffScreenModes.Other;
             }
 
-            public void CreateOffScreenEmoteOpacityEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreateOffScreenEmoteOpacityEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
                     (_OffScreenEmoteOpacityEntry = new TextMenu.Slider("modoptions_celestenetclient_offscreenemoteopacity".DialogClean(), i => $"{i * 5}%", 0, 20, OffScreenEmoteOpacity))
                     .Change(v => OffScreenEmoteOpacity = v)
@@ -431,10 +475,13 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingSubHeader("modoptions_celestenetclient_subheading_ui")]
         [SettingSubText("modoptions_celestenetclient_uisizehint")]
         [SettingRange(UISizeMin, UISizeMax)]
-        public int UISize {
+        public int UISize
+        {
             get => _UISize;
-            set {
-                if (value != _UISize) {
+            set
+            {
+                if (value != _UISize)
+                {
                     // update both chat and player UI size properties to the same value
                     UISizeChat = UISizePlayerList = value;
                 }
@@ -445,14 +492,20 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingIgnore, YamlIgnore]
         public int _UISizeChat { get; private set; }
         [SettingRange(UISizeMin, UISizeMax)]
-        public int UISizeChat {
+        public int UISizeChat
+        {
             get => _UISizeChat;
-            set {
-                if (UISizeChatSlider != null && value != _UISizeChat) {
+            set
+            {
+                if (UISizeChatSlider != null && value != _UISizeChat)
+                {
                     // all this is to make the OUI elements update and "react" properly (and visually)
-                    if (value < _UISizeChat) {
+                    if (value < _UISizeChat)
+                    {
                         UISizeChatSlider.LeftPressed();
-                    } else {
+                    }
+                    else
+                    {
                         UISizeChatSlider.RightPressed();
                     }
 
@@ -469,14 +522,20 @@ namespace Celeste.Mod.CelesteNet.Client {
         [SettingIgnore, YamlIgnore]
         public int _UISizePlayerList { get; private set; }
         [SettingRange(UISizeMin, UISizeMax)]
-        public int UISizePlayerList {
+        public int UISizePlayerList
+        {
             get => _UISizePlayerList;
-            set {
-                if (UISizePlayerListSlider != null && value != _UISizePlayerList) {
+            set
+            {
+                if (UISizePlayerListSlider != null && value != _UISizePlayerList)
+                {
                     // all this is to make the OUI elements update and "react" properly (and visually)
-                    if (value < _UISizePlayerList) {
+                    if (value < _UISizePlayerList)
+                    {
                         UISizePlayerListSlider.LeftPressed();
-                    } else {
+                    }
+                    else
+                    {
                         UISizePlayerListSlider.RightPressed();
                     }
 
@@ -506,7 +565,8 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         public ChatUIMenu ChatUI { get; set; } = new();
         [SettingSubMenu]
-        public class ChatUIMenu {
+        public class ChatUIMenu
+        {
 
             public CelesteNetChatComponent.ChatMode ShowNewMessages { get; set; }
 
@@ -528,7 +588,8 @@ namespace Celeste.Mod.CelesteNet.Client {
 
             public CelesteNetChatComponent.ChatScrollFade ChatScrollFading { get; set; } = CelesteNetChatComponent.ChatScrollFade.Fast;
 
-            public void CreateNewMessagesFadeTimeEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreateNewMessagesFadeTimeEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
                     new TextMenu.Slider("modoptions_celestenetclient_chatui_newmessagesfadetime".DialogClean(), i => $"{i / 2f:F1} s", 1, 20, NewMessagesFadeTime).Change(v => NewMessagesFadeTime = v)
                 );
@@ -541,7 +602,8 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         public PlayerListUIMenu PlayerListUI { get; set; } = new();
         [SettingSubMenu]
-        public class PlayerListUIMenu {
+        public class PlayerListUIMenu
+        {
 
             public CelesteNetPlayerListComponent.ListModes PlayerListMode { get; set; } = CelesteNetPlayerListComponent.ListModes.Channels;
 
@@ -561,9 +623,10 @@ namespace Celeste.Mod.CelesteNet.Client {
             [SettingRange(0, 100, true)]
             public int ScrollDelayLeniency { get; set; } = 50;
 
-            public void CreateScrollDelayEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreateScrollDelayEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
-                    new TextMenu.Slider("modoptions_celestenetclient_scrolldelay".DialogClean(), i => $"{i/2f:F1} s", 0, 5, ScrollDelay).Change(v => ScrollDelay = v)
+                    new TextMenu.Slider("modoptions_celestenetclient_scrolldelay".DialogClean(), i => $"{i / 2f:F1} s", 0, 5, ScrollDelay).Change(v => ScrollDelay = v)
                 );
             }
         }
@@ -591,13 +654,15 @@ namespace Celeste.Mod.CelesteNet.Client {
             [SettingRange(0, 50, true)]
             public int DynScaleRange { get; set; } = 50;
 
-            public void CreateChatOpacityEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreateChatOpacityEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
                     new TextMenu.Slider("modoptions_celestenetclient_ChatOpacity".DialogClean(), i => $"{i * 5}%", 0, 20, ChatOpacity).Change(v => ChatOpacity = v)
                 );
             }
 
-            public void CreatePlayerListOpacityEntry(TextMenuExt.SubMenu menu, bool inGame) {
+            public void CreatePlayerListOpacityEntry(TextMenuExt.SubMenu menu, bool inGame)
+            {
                 menu.Add(
                     new TextMenu.Slider("modoptions_celestenetclient_PlayerListOpacity".DialogClean(), i => $"{i * 5}%", 0, 20, PlayerListOpacity).Change(v => PlayerListOpacity = v)
                 );
@@ -624,112 +689,130 @@ namespace Celeste.Mod.CelesteNet.Client {
         // Debug
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.ConnectionType is now CelesteNetClientSettings.Debug.ConnectionType")]
-        public ConnectionType ConnectionType {
+        public ConnectionType ConnectionType
+        {
             get { return Debug?.ConnectionType ?? ConnectionType.Auto; }
             set { if (Debug != null) Debug.ConnectionType = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.DevLogLevel is now CelesteNetClientSettings.Debug.DevLogLevel")]
-        public LogLevel DevLogLevel { 
+        public LogLevel DevLogLevel
+        {
             get { return Debug?.DevLogLevel ?? LogLevel.INF; }
             set { if (Debug != null) Debug.DevLogLevel = value; }
         }
         // In-Game
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.Interactions is now CelesteNetClientSettings.InGame.Interactions")]
-        public bool Interactions { 
+        public bool Interactions
+        {
             get { return InGame?.Interactions ?? true; }
             set { if (InGame != null) InGame.Interactions = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.Sounds is now CelesteNetClientSettings.InGame.Sounds")]
-        public SyncMode Sounds {
+        public SyncMode Sounds
+        {
             get { return InGame?.Sounds ?? SyncMode.ON; }
             set { if (InGame != null) InGame.Sounds = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.SoundVolume is now CelesteNetClientSettings.InGame.SoundVolume")]
-        public int SoundVolume {
+        public int SoundVolume
+        {
             get { return InGame?.SoundVolume ?? 8; }
             set { if (InGame != null) InGame.SoundVolume = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.Entities is now CelesteNetClientSettings.InGame.Entities")]
-        public SyncMode Entities {
+        public SyncMode Entities
+        {
             get { return InGame?.Entities ?? SyncMode.ON; }
             set { if (InGame != null) InGame.Entities = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.PlayerOpacity is now CelesteNetClientSettings.InGame.OtherPlayerOpacity")]
-        public int PlayerOpacity {
-            get { return InGame?.OtherPlayerOpacity/5 ?? 4; }
+        public int PlayerOpacity
+        {
+            get { return InGame?.OtherPlayerOpacity / 5 ?? 4; }
             set { if (InGame != null) InGame.OtherPlayerOpacity = value * 5; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.NameOpacity is now CelesteNetClientSettings.InGameHUD.NameOpacity")]
-        public int NameOpacity {
-            get { return InGameHUD?.NameOpacity/5 ?? 4; }
+        public int NameOpacity
+        {
+            get { return InGameHUD?.NameOpacity / 5 ?? 4; }
             set { if (InGameHUD != null) InGameHUD.NameOpacity = value * 5; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.ShowOwnName is now CelesteNetClientSettings.InGameHUD.ShowOwnName")]
-        public bool ShowOwnName {
+        public bool ShowOwnName
+        {
             get { return InGameHUD?.ShowOwnName ?? true; }
             set { if (InGameHUD != null) InGameHUD.ShowOwnName = value; }
         }
         // Chat UI
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.ShowNewMessages is now CelesteNetClientSettings.ChatUI.ShowNewMessages")]
-        public CelesteNetChatComponent.ChatMode ShowNewMessages {
+        public CelesteNetChatComponent.ChatMode ShowNewMessages
+        {
             get { return ChatUI?.ShowNewMessages ?? CelesteNetChatComponent.ChatMode.All; }
             set { if (ChatUI != null) ChatUI.ShowNewMessages = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.ChatLogLength is now CelesteNetClientSettings.ChatUI.ChatLogLength")]
-        public int ChatLogLength {
+        public int ChatLogLength
+        {
             get { return ChatUI?.ChatLogLength ?? 8; }
             set { if (ChatUI != null) ChatUI.ChatLogLength = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.ChatScrollSpeed is now CelesteNetClientSettings.ChatUI.ChatScrollSpeed")]
-        public int ChatScrollSpeed {
+        public int ChatScrollSpeed
+        {
             get { return ChatUI?.ChatScrollSpeed ?? 2; }
             set { if (ChatUI != null) ChatUI.ChatScrollSpeed = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.ChatScrollFading is now CelesteNetClientSettings.ChatUI.ChatScrollFading")]
-        public CelesteNetChatComponent.ChatScrollFade ChatScrollFading {
+        public CelesteNetChatComponent.ChatScrollFade ChatScrollFading
+        {
             get { return ChatUI?.ChatScrollFading ?? CelesteNetChatComponent.ChatScrollFade.Fast; }
             set { if (ChatUI != null) ChatUI.ChatScrollFading = value; }
         }
         // Player List UI
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.PlayerListMode is now CelesteNetClientSettings.PlayerListUI.PlayerListMode")]
-        public CelesteNetPlayerListComponent.ListModes PlayerListMode {
+        public CelesteNetPlayerListComponent.ListModes PlayerListMode
+        {
             get { return PlayerListUI?.PlayerListMode ?? CelesteNetPlayerListComponent.ListModes.Channels; }
             set { if (PlayerListUI != null) PlayerListUI.PlayerListMode = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.ShowPlayerListLocations is now CelesteNetClientSettings.PlayerListUI.ShowPlayerListLocations")]
-        public CelesteNetPlayerListComponent.LocationModes ShowPlayerListLocations {
+        public CelesteNetPlayerListComponent.LocationModes ShowPlayerListLocations
+        {
             get { return PlayerListUI?.ShowPlayerListLocations ?? CelesteNetPlayerListComponent.LocationModes.ON; }
             set { if (PlayerListUI != null) PlayerListUI.ShowPlayerListLocations = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.PlayerListShortenRandomizer is now CelesteNetClientSettings.UICustomize.PlayerListShortenRandomizer")]
-        public bool PlayerListShortenRandomizer {
+        public bool PlayerListShortenRandomizer
+        {
             get { return UICustomize?.PlayerListShortenRandomizer ?? true; }
             set { if (UICustomize != null) UICustomize.PlayerListShortenRandomizer = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.PlayerListAllowSplit is now CelesteNetClientSettings.UICustomize.PlayerListAllowSplit")]
-        public bool PlayerListAllowSplit {
+        public bool PlayerListAllowSplit
+        {
             get { return UICustomize?.PlayerListAllowSplit ?? true; }
             set { if (UICustomize != null) UICustomize.PlayerListAllowSplit = value; }
         }
         [SettingIgnore, YamlIgnore]
         [Obsolete("CelesteNetClientSettings.PlayerListShowPing is now CelesteNetClientSettings.PlayerListUI.PlayerListShowPing")]
-        public bool PlayerListShowPing {
+        public bool PlayerListShowPing
+        {
             get { return PlayerListUI?.PlayerListShowPing ?? true; }
             set { if (PlayerListUI != null) PlayerListUI.PlayerListShowPing = value; }
         }
@@ -818,15 +901,18 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         #region Helpers
 
-        private float CalcUIScale(int uisize) {
+        private float CalcUIScale(int uisize)
+        {
             if (UIScaleOverride > 0f)
                 return UIScaleOverride;
             return ((uisize - 1f) / (UISizeMax - 1f));
         }
 
         [SettingIgnore, YamlIgnore]
-        public string Host {
-            get {
+        public string Host
+        {
+            get
+            {
                 string server = EffectiveServer.ToLowerInvariant();
                 int indexOfPort;
                 if (!string.IsNullOrEmpty(server) &&
@@ -838,8 +924,10 @@ namespace Celeste.Mod.CelesteNet.Client {
             }
         }
         [SettingIgnore, YamlIgnore]
-        public int Port {
-            get {
+        public int Port
+        {
+            get
+            {
                 string server = EffectiveServer;
                 int indexOfPort;
                 if (!string.IsNullOrEmpty(server) &&
@@ -855,7 +943,8 @@ namespace Celeste.Mod.CelesteNet.Client {
 
         #region Custom Entry Creators
 
-        public TextMenu.Slider CreateMenuSlider(TextMenu menu, string dialogLabel, int min, int max, int val, Func<int, string> values, Action<int> onChange) {
+        public TextMenu.Slider CreateMenuSlider(TextMenu menu, string dialogLabel, int min, int max, int val, Func<int, string> values, Action<int> onChange)
+        {
             TextMenu.Slider item = new TextMenu.Slider($"modoptions_celestenetclient_{dialogLabel}".DialogClean(), values, min, max, val);
             item.Change(onChange);
             menu.Add(item);
@@ -881,21 +970,27 @@ namespace Celeste.Mod.CelesteNet.Client {
                         FileName = "https://celeste.centralteam.cn/oauth/authorize?client_id=FSygRsIuDy0edjcJzYuw2PpJL1TwkWa&response_type=code&redirect_uri=http://localhost:38038/auth&scope=celeste.read",
                         UseShellExecute = true
                     };
-                    System.Diagnostics.Process.Start(psi);
+                    Process.Start(psi);
                 }
                 catch (Exception e)
                 {
-                    CelesteNetClientModule.Instance.Context.Status.Set("Please Go to celeste.centralteam.cn Press [CelesteLogin].", 5f);
-                    Logger.Log(LogLevel.INF, "celestemodcore", "Login Failed , The login link has been copied to the clipboard, please access the login yourself.");
+                    Logger.LogDetailedException(e, "CelesteLogin");
+                    var ctx = CelesteNetClientModule.Instance.Context;
+                    if (ctx is null)
+                        CelesteNetClientModule.Instance.Context = ctx = new(Celeste.Instance, null);
+                    ctx.Status?.Set("Please Go to celeste.centralteam.cn Press [CelesteLogin].", 5f);
+                    Logger.Log(LogLevel.INF, "celestemodcore", "Open browser failed.");
                 }
             });
             LoginButton.Disabled = Connected;
         }
 
-        public TextMenu.Button CreateMenuStringInput(TextMenu menu, string dialogLabel, Func<string, string> dialogTransform, int maxValueLength, Func<string> currentValue, Action<string> newValue) {
+        public TextMenu.Button CreateMenuStringInput(TextMenu menu, string dialogLabel, Func<string, string> dialogTransform, int maxValueLength, Func<string> currentValue, Action<string> newValue)
+        {
             string label = $"modoptions_celestenetclient_{dialogLabel}".DialogClean();
             TextMenu.Button item = new TextMenu.Button(dialogTransform?.Invoke(label) ?? label);
-            item.Pressed(() => {
+            item.Pressed(() =>
+            {
                 Audio.Play("event:/ui/main/savefile_rename_start");
                 menu.SceneAs<Overworld>().Goto<OuiModOptionString>().Init<OuiModOptions>(
                     currentValue.Invoke(),
@@ -907,7 +1002,8 @@ namespace Celeste.Mod.CelesteNet.Client {
             return item;
         }
 
-        public void CreateConnectedEntry(TextMenu menu, bool inGame) {
+        public void CreateConnectedEntry(TextMenu menu, bool inGame)
+        {
             menu.Add(
                 (EnabledEntry = new TextMenu.OnOff("modoptions_celestenetclient_connected".DialogClean().Replace("((server))", EffectiveServer), Connected))
                 .Change(v => Connected = v)
@@ -915,7 +1011,8 @@ namespace Celeste.Mod.CelesteNet.Client {
             EnabledEntry.AddDescription(menu, "modoptions_celestenetclient_connectedhint".DialogClean());
         }
 
-        public void CreateServerEntry(TextMenu menu, bool inGame) {
+        public void CreateServerEntry(TextMenu menu, bool inGame)
+        {
 #if DEBUG
             ServerEntry = CreateMenuStringInput(menu, "SERVER", s => s.Replace("((server))", EffectiveServer), 30, () => EffectiveServer, newVal => EffectiveServer = newVal);
             ServerEntry.Disabled = inGame || Connected;
@@ -923,7 +1020,7 @@ namespace Celeste.Mod.CelesteNet.Client {
 #endif
         }
 
-        public void CreateRefreshTokenEntry(TextMenu menu,bool inGame)
+        public void CreateRefreshTokenEntry(TextMenu menu, bool inGame)
         {
 
         }
@@ -939,34 +1036,40 @@ namespace Celeste.Mod.CelesteNet.Client {
             SetKeyEntryDisabled(inGame || Connected || _loginMode != LoginModeType.Key);
         }
 
-        public void SetKeyEntryDisabled(bool value = true) {
+        public void SetKeyEntryDisabled(bool value = true)
+        {
             if (KeyEntry == null)
                 return;
             KeyEntry.Disabled = value;
             KeyEntry.Label = "modoptions_celestenetclient_key".DialogClean().Replace("((key))", Key.Length > 0 ? KeyDisplayDialog(_KeyError) : "-");
         }
 
-        public string KeyDisplayDialog(KeyErrors val) {
+        public string KeyDisplayDialog(KeyErrors val)
+        {
             if (_loginMode != LoginModeType.Key)
                 return "modoptions_celestenetclient_keydisplay_none".DialogClean();
 
-            if (!Connected) {
+            if (!Connected)
+            {
                 // Don't show the error if we managed to connect, I guess :clueless:
-                switch (val) {
-                    case KeyErrors.InvalidChars:
-                        return "modoptions_celestenetclient_keyerror_invalidchars".DialogClean();
-                    case KeyErrors.InvalidLength:
-                        return "modoptions_celestenetclient_keyerror_invalidlength".DialogClean();
-                    case KeyErrors.InvalidKey:
-                        return "modoptions_celestenetclient_keyerror_invalidkey".DialogClean();
+                switch (val)
+                {
+                case KeyErrors.InvalidChars:
+                    return "modoptions_celestenetclient_keyerror_invalidchars".DialogClean();
+                case KeyErrors.InvalidLength:
+                    return "modoptions_celestenetclient_keyerror_invalidlength".DialogClean();
+                case KeyErrors.InvalidKey:
+                    return "modoptions_celestenetclient_keyerror_invalidkey".DialogClean();
                 }
             }
 
             return "modoptions_celestenetclient_keydisplay_hide".DialogClean();
         }
 
-        public void CreateEmotesEntry(TextMenu menu, bool inGame) {
-            TextMenu.Button item = CreateMenuButton(menu, "RELOAD", null, () => {
+        public void CreateEmotesEntry(TextMenu menu, bool inGame)
+        {
+            TextMenu.Button item = CreateMenuButton(menu, "RELOAD", null, () =>
+            {
                 CelesteNetClientSettings settingsOld = CelesteNetClientModule.Settings;
                 CelesteNetClientModule.Instance.LoadSettings();
                 CelesteNetClientSettings settingsNew = CelesteNetClientModule.Settings;
@@ -977,26 +1080,29 @@ namespace Celeste.Mod.CelesteNet.Client {
             item.AddDescription(menu, "modoptions_celestenetclient_reloadhint".DialogClean());
         }
 
-        public void CreateExtraServersEntry(TextMenu menu, bool inGame) {
+        public void CreateExtraServersEntry(TextMenu menu, bool inGame)
+        {
             int selected = 0;
             for (int i = 0; i < ExtraServers.Length; i++)
                 if (ExtraServers[i] == Server)
-                    selected = i+1;
+                    selected = i + 1;
 
             ExtraServersEntry = CreateMenuSlider(
                 menu, "EXTRASERVERS_SLIDER",
                 0, ExtraServers.Length, selected,
-                i => i == 0 ? DefaultServer : ExtraServers[i-1],
-                i => {
+                i => i == 0 ? DefaultServer : ExtraServers[i - 1],
+                i =>
+                {
                     if (!Connected && i <= ExtraServers.Length)
-                        Server = i == 0 ? DefaultServer : ExtraServers[i-1];
+                        Server = i == 0 ? DefaultServer : ExtraServers[i - 1];
                 }
             );
 
             ExtraServersEntry.Visible = ExtraServers.Length > 0;
             ExtraServersEntry.Disabled = Connected;
 
-            TextMenu.Button item = CreateMenuButton(menu, "EXTRASERVERS_RELOAD", null, () => {
+            TextMenu.Button item = CreateMenuButton(menu, "EXTRASERVERS_RELOAD", null, () =>
+            {
                 CelesteNetClientSettings settingsOld = CelesteNetClientModule.Settings;
                 CelesteNetClientModule.Instance.LoadSettings();
                 CelesteNetClientSettings settingsNew = CelesteNetClientModule.Settings;
@@ -1009,7 +1115,7 @@ namespace Celeste.Mod.CelesteNet.Client {
                 ExtraServersEntry.Values.Clear();
 
                 for (int i = 0; i <= ExtraServers.Length; i++)
-                    ExtraServersEntry.Add(i == 0 ? DefaultServer : ExtraServers[i-1], i, i == old_idx);
+                    ExtraServersEntry.Add(i == 0 ? DefaultServer : ExtraServers[i - 1], i, i == old_idx);
 
                 ExtraServersEntry.Visible = ExtraServers.Length > 0;
             });
@@ -1019,20 +1125,24 @@ namespace Celeste.Mod.CelesteNet.Client {
 #endif
         }
 
-        public void CreateUISizeChatEntry(TextMenu menu, bool inGame) {
+        public void CreateUISizeChatEntry(TextMenu menu, bool inGame)
+        {
             if (UISizeChat < UISizeMin || UISizeChat > UISizeMax)
                 UISizeChat = UISize;
             UISizeChatSlider = CreateMenuSlider(menu, "UISIZECHAT", UISizeMin, UISizeMax, UISizeChat, i => i.ToString(), v => _UISizeChat = v);
         }
 
-        public void CreateUISizePlayerListEntry(TextMenu menu, bool inGame) {
+        public void CreateUISizePlayerListEntry(TextMenu menu, bool inGame)
+        {
             if (UISizePlayerList < UISizeMin || UISizePlayerList > UISizeMax)
                 UISizePlayerList = UISize;
             UISizePlayerListSlider = CreateMenuSlider(menu, "UISIZEPLAYERLIST", UISizeMin, UISizeMax, UISizePlayerList, i => i.ToString(), v => _UISizePlayerList = v);
         }
 
-        public void CreateResetGeneralButtonEntry(TextMenu menu, bool inGame) {
-            ResetGeneralButton = CreateMenuButton(menu, "RESETGENERAL", null, () => {
+        public void CreateResetGeneralButtonEntry(TextMenu menu, bool inGame)
+        {
+            ResetGeneralButton = CreateMenuButton(menu, "RESETGENERAL", null, () =>
+            {
                 SettingsVersionDoNotEdit = SettingsVersionCurrent;
                 Server = DefaultServer;
                 // do this which is hopefully visually correct on the OnOff items...
@@ -1050,8 +1160,10 @@ namespace Celeste.Mod.CelesteNet.Client {
             ResetGeneralButton.Disabled = Connected;
         }
 
-        public void CreateConnectLocallyButtonEntry(TextMenu menu, bool inGame) {
-            ConnectLocallyButton = CreateMenuButton(menu, "CONNECTLOCALLY", null, () => {
+        public void CreateConnectLocallyButtonEntry(TextMenu menu, bool inGame)
+        {
+            ConnectLocallyButton = CreateMenuButton(menu, "CONNECTLOCALLY", null, () =>
+            {
                 ServerOverride = "localhost";
                 Connected = true;
             });
@@ -1059,7 +1171,8 @@ namespace Celeste.Mod.CelesteNet.Client {
             ConnectLocallyButton.Disabled = Connected;
         }
 
-        public void CreateAutoReconnectEntry(TextMenu menu, bool inGame) {
+        public void CreateAutoReconnectEntry(TextMenu menu, bool inGame)
+        {
             menu.Add(
                 (AutoReconnectEntry = new TextMenu.OnOff("modoptions_celestenetclient_autoreconnect".DialogClean(), AutoReconnect))
                 .Change(v => AutoReconnect = v)
@@ -1067,7 +1180,8 @@ namespace Celeste.Mod.CelesteNet.Client {
             AutoReconnectEntry.AddDescription(menu, "modoptions_celestenetclient_autoreconnecthint".DialogClean());
         }
 
-        public void CreateReceivePlayerAvatarsEntry(TextMenu menu, bool inGame) {
+        public void CreateReceivePlayerAvatarsEntry(TextMenu menu, bool inGame)
+        {
             menu.Add(
                 (ReceivePlayerAvatarsEntry = new TextMenu.OnOff("modoptions_celestenetclient_avatars".DialogClean(), ReceivePlayerAvatars))
                 .Change(v => ReceivePlayerAvatars = v)
@@ -1075,8 +1189,10 @@ namespace Celeste.Mod.CelesteNet.Client {
             ReceivePlayerAvatarsEntry.AddDescription(menu, "modoptions_celestenetclient_avatarshint".DialogClean());
         }
 
-        public void CreateConnectDefaultButtonEntry(TextMenu menu, bool inGame) {
-            ConnectDefaultButton = CreateMenuButton(menu, "CONNECTDEFAULT", (label) => label.Replace("((default))", DefaultServer), () => {
+        public void CreateConnectDefaultButtonEntry(TextMenu menu, bool inGame)
+        {
+            ConnectDefaultButton = CreateMenuButton(menu, "CONNECTDEFAULT", (label) => label.Replace("((default))", DefaultServer), () =>
+            {
                 ServerOverride = "";
                 Server = DefaultServer;
                 CelesteNetClientModule.Instance.ResetReconnectPenalty();
@@ -1093,38 +1209,43 @@ namespace Celeste.Mod.CelesteNet.Client {
             ConnectDefaultButton.Visible = ConnectDefaultVisible;
         }
 
-#endregion
+        #endregion
 
-        public static ulong GenerateClientID() {
+        public static ulong GenerateClientID()
+        {
             return ulong.Parse(Guid.NewGuid().ToString().Replace("-", "").Substring(0, 16), System.Globalization.NumberStyles.HexNumber);
         }
 
         [Flags]
-        public enum SyncMode {
-            OFF =           0b00,
-            Send =          0b01,
-            Receive =       0b10,
-            ON =            0b11
+        public enum SyncMode
+        {
+            OFF = 0b00,
+            Send = 0b01,
+            Receive = 0b10,
+            ON = 0b11
         }
 
         public enum LoginModeType
         {
             Key = 1
         }
-        public enum OffScreenModes {
+        public enum OffScreenModes
+        {
             Same = 0,
             Hidden = 1,
             Other = 2
         }
 
-        public enum KeyErrors {
+        public enum KeyErrors
+        {
             None = 0,
             InvalidLength,
             InvalidChars,
             InvalidKey
         }
 
-        public enum ClientIDSendMode {
+        public enum ClientIDSendMode
+        {
             Off = 0,
             NotOnLocalhost = 1,
             On = 2
