@@ -49,8 +49,8 @@ namespace Celeste.Mod.CelesteNet.Client
         public enum ServerSelectOption
         {
             //AutoSelect = 0,
-            MainServer = 1,
-            BackupServer = 2
+            MainServer = 0,
+            BackupServer = 1
         }
 
         private ServerSelectOption serverSelect;
