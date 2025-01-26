@@ -48,9 +48,9 @@ namespace Celeste.Mod.CelesteNet.Client
 
         public enum ServerSelectOption
         {
-            AutoSelect,
-            MainServer,
-            BackupServer
+            //AutoSelect = 0,
+            MainServer = 1,
+            BackupServer = 2
         }
 
         private ServerSelectOption serverSelect;
@@ -60,11 +60,11 @@ namespace Celeste.Mod.CelesteNet.Client
             get => serverSelect;
             set
             {
-                if (HttpUtils.Get("https://miaoedit.centralteam.cn/setting", 15000) == "1")
-                {
-                    serverSelect = ServerSelectOption.AutoSelect;
-                    return;
-                }
+                //if (HttpUtils.Get("https://miaoedit.centralteam.cn/setting", 15000) == "1")
+                //{
+                //    serverSelect = ServerSelectOption.AutoSelect;
+                //    return;
+                //}
                 serverSelect = value;
             }
         }
@@ -79,7 +79,7 @@ namespace Celeste.Mod.CelesteNet.Client
 
                 Server = serverSelect switch
                 {
-                    ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
+                    //ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
                     ServerSelectOption.MainServer => "celesteserver.centralteam.cn:17231",
                     ServerSelectOption.BackupServer => "45.125.44.66:17230",
                     _ => Server
