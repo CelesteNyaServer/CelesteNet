@@ -43,6 +43,26 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         public Dictionary<string, DataChat> Pending = new();
         public string Typing = "";
 
+        public void AddLocalFakeMessage(string msg)
+        {
+            var info = new DataPlayerInfo { };
+            info.Name = "Local";
+            info.NameColor = Color.Blue;
+
+            DataChat msgData = new()
+            {
+                Player = info,
+                Text = msg,
+
+                Color = Color.Blue,
+                CreatedByServer = true,
+                Date = DateTime.Now,
+                ReceivedDate = DateTime.Now,
+                ID = 1,
+            };
+            Log.Add(msgData);
+        }
+
         public List<CommandInfo> CommandList = new();
         public Dictionary<string, string> CommandAliasLookup = new();
 
@@ -323,6 +343,8 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         }
 
         public void Send(string text) {
+            if (Context.Main.ParseAndExecCommand(text)) return;
+
             text = text.Trim();
             if (string.IsNullOrEmpty(text))
                 return;

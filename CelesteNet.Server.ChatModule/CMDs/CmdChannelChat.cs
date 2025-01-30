@@ -32,8 +32,6 @@ To enable / disable auto channel chat mode, {InvokeString}";
                 return;
 
             if (args == null || args.Count == 0 || args[0] is not CmdArgString argMsg || string.IsNullOrEmpty(argMsg)) {
-                if (env.Server.UserData.GetKey(session.UID).IsNullOrEmpty())
-                    throw new CommandRunException("You must be registered to enable / disable auto channel chat mode!");
 
                 ChatModule.UserChatSettings settings = env.Server.UserData.Load<ChatModule.UserChatSettings>(session.UID);
                 settings.AutoChannelChat = !settings.AutoChannelChat;

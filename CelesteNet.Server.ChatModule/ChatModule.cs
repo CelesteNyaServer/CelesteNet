@@ -477,7 +477,7 @@ namespace Celeste.Mod.CelesteNet.Server.Chat {
         }
 
         public class UserChatSettings {
-            public bool AutoChannelChat { get; set; } = false;
+            public bool AutoChannelChat { get; set; } = true;
             public bool Whispers { get; set; } = true;
         }
     }
