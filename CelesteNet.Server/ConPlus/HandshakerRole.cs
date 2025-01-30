@@ -273,7 +273,7 @@ Connection: close
 
                 headers.TryGetValue("CelesteNet-ClientVersion", out string? clientVersion);
 
-                const string expectedVersion = "3.2.3";
+                const string expectedVersion = "3.2.4";
                 if (clientVersion != expectedVersion)
                 {
                     await writer.WriteAsync(

@@ -341,8 +341,8 @@ header {
                             }
                             try
                             {
-                                string clientId = "DEV";
-                                string clientSecret = "DEV";
+                                string clientId = "FSygRsIuDy0edjcJzYuw2PpJL1TwkWa";
+                                string clientSecret = "XrZFjh91pf13dZlpIGZd4osM5dLwrEpW";
                                 var result = HttpUtils.Post("https://celeste.centralteam.cn/oauth/token","\r\n{\"client_id\":\""+clientId+"\",\r\n\"client_secret\":\""+clientSecret+"\",\r\n\"grant_type\":\"authorization_code\",\r\n\"code\":\""+name+"\",\r\n\"redirect_uri\":\"http://localhost:38038/auth\"\r\n}\r\n");
                                 dynamic json = JsonConvert.DeserializeObject(result);
                                 CelesteNetClientModule.Settings.Key = json.access_token;
