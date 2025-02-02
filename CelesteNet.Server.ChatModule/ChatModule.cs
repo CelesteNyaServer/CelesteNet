@@ -374,7 +374,8 @@ namespace Celeste.Mod.CelesteNet.Server.Chat {
             }
 
             if (msg.Player != null && Server.PlayersByID.TryGetValue(msg.Player.ID, out session) &&
-                Server.UserData.Load<UserChatSettings>(session.UID).AutoChannelChat) {
+            Server.UserData.Load<UserChatSettings>(session.UID).AutoChannelChat && session.Name != "main")
+            {
                 msg.Targets = new DataPlayerInfo[] { msg.Player };
                 Commands.Get<CmdChannelChat>().ParseAndRun(new CmdEnv(this, msg));
                 return;

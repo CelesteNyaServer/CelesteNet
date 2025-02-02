@@ -959,6 +959,21 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
                 SendState();
             StateUpdated = false;
 
+            if (CelesteNetClientModule.Settings.OpacityNearSelf && Player != null)
+            {
+                foreach (var ghost in Ghosts.Values)
+                {
+                    if (ghost.PlayerInfo.Name == watchPlayerName)
+                    {
+                        ghost.Alpha = 1f;
+                    }
+                    else
+                    {
+                        ghost.Alpha = Math.Min(Math.Max(0.3f, (ghost.Position - Player.Position).LengthSquared() / 3000f), 1f);
+                    }
+                }
+            }
+
             if (Player != null)
                 SendFrame();
         }

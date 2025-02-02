@@ -150,6 +150,7 @@ namespace Celeste.Mod.CelesteNet.Client
             On.Celeste.OuiMainMenu.Enter += OuiMainMenu_Enter;
         }
 
+
         private IEnumerator OuiMainMenu_Enter(On.Celeste.OuiMainMenu.orig_Enter orig, OuiMainMenu self, Oui from)
         {
             if (InstalledBothServer && !ShownInstalledBothServerWarning)

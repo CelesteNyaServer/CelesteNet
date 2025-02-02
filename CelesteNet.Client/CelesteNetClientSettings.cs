@@ -111,6 +111,9 @@ namespace Celeste.Mod.CelesteNet.Client
             }
         }
 
+        [SettingName("MODOPTIONS_CELESTENETCLIENT_OPATICY_NEAR_SELF")]
+        public bool OpacityNearSelf { get; set; } = true;
+
         [SettingName("MODOPTIONS_CELESTENETCLIENT_AUTO_CONNECT")]
         public bool AutoConnect { get; set; }
 
