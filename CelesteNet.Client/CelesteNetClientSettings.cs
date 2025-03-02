@@ -46,28 +46,11 @@ namespace Celeste.Mod.CelesteNet.Client
         [SettingIgnore, YamlIgnore]
         public TextMenu.Button LoginButton { get; protected set; }
 
-        public enum ServerSelectOption
-        {
-            //AutoSelect = 0,
-            MainServer = 0,
-            BackupServer = 1
-        }
+        [SettingIgnore, YamlIgnore]
+        public string ServerSelect { get; set; } = new string("");
 
-        private ServerSelectOption serverSelect;
-
-        public ServerSelectOption ServerSelect
-        {
-            get => serverSelect;
-            set
-            {
-                //if (HttpUtils.Get("https://miaoedit.centralteam.cn/setting", 15000) == "1")
-                //{
-                //    serverSelect = ServerSelectOption.AutoSelect;
-                //    return;
-                //}
-                serverSelect = value;
-            }
-        }
+        [SettingIgnore, YamlIgnore]
+        public TextMenu.Slider? ServerSelectEntry { get; protected set; }
 
         [YamlIgnore]
         public bool Connected
@@ -76,14 +59,6 @@ namespace Celeste.Mod.CelesteNet.Client
             set
             {
                 WantsToBeConnected = value;
-
-                Server = serverSelect switch
-                {
-                    //ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
-                    ServerSelectOption.MainServer => "celesteserver.centralteam.cn:17231",
-                    ServerSelectOption.BackupServer => "45.125.44.66:17230",
-                    _ => Server
-                };
 
                 if (value && !Connected)
                 {
@@ -102,8 +77,8 @@ namespace Celeste.Mod.CelesteNet.Client
                     ServerEntry.Disabled = value || !(Engine.Scene is Overworld);
                 if (KeyEntry != null)
                     SetKeyEntryDisabled(value || !(Engine.Scene is Overworld) || _loginMode != LoginModeType.Key);
-                if (ExtraServersEntry != null)
-                    ExtraServersEntry.Disabled = value;
+                if (ServerSelectEntry != null)
+                    ServerSelectEntry.Disabled = value;
                 if (ResetGeneralButton != null)
                     ResetGeneralButton.Disabled = value;
                 if (ConnectLocallyButton != null)
@@ -154,7 +129,7 @@ namespace Celeste.Mod.CelesteNet.Client
         [SettingIgnore, YamlIgnore]
         public TextMenu.OnOff? ReceivePlayerAvatarsEntry { get; protected set; }
 
-        public const string DefaultServer = "celesteserver.centralteam.cn";
+        public static readonly string[] DefaultServer = { "celesteserver.centralteam.cn:17231", "45.125.44.66:17230" };
 
         [SettingIgnore, YamlIgnore]
         public string EffectiveServer
@@ -185,7 +160,7 @@ namespace Celeste.Mod.CelesteNet.Client
                 UpdateServerInDialogs();
             }
         }
-        private string _Server = DefaultServer;
+        private string _Server = DefaultServer[0];
 
         // Any non-empty string will override Server property temporarily. (setting not saved)
         // Currently only used for "connect locally" button (for Nucleus etc.)
@@ -217,7 +192,7 @@ namespace Celeste.Mod.CelesteNet.Client
                 EnabledEntry.Label = "modoptions_celestenetclient_connected".DialogClean().Replace("((server))", EffectiveServer);
 
             if (ConnectDefaultButton != null)
-                ConnectDefaultButton.Label = "modoptions_celestenetclient_connectdefault".DialogClean().Replace("((default))", DefaultServer);
+                ConnectDefaultButton.Label = "modoptions_celestenetclient_connectdefault".DialogClean().Replace("((default))", DefaultServer[0]);
 
             if (ConnectDefaultButtonHint != null)
                 ConnectDefaultButtonHint.Title = "modoptions_celestenetclient_connectdefaulthint".DialogClean().Replace("((server))", EffectiveServer);
@@ -231,8 +206,8 @@ namespace Celeste.Mod.CelesteNet.Client
         [SettingIgnore]
         public string[] ExtraServers { get; set; } = new string[0];
 
-        [SettingIgnore, YamlIgnore]
-        public TextMenu.Slider? ExtraServersEntry { get; protected set; }
+        // [SettingIgnore, YamlIgnore]
+        // public TextMenu.Slider? ExtraServersEntry { get; protected set; }
 
 #if !DEBUG
         [SettingSubHeader("modoptions_celestenetclient_subheading_general")]
@@ -249,11 +224,11 @@ namespace Celeste.Mod.CelesteNet.Client
                 _loginMode = value;
                 switch (value)
                 {
-                case LoginModeType.Key:
-                    // Enable Key (unless in-game), disable Name input
-                    if (KeyEntry != null)
-                        SetKeyEntryDisabled(!(Engine.Scene is Overworld) || Connected);
-                    break;
+                    case LoginModeType.Key:
+                        // Enable Key (unless in-game), disable Name input
+                        if (KeyEntry != null)
+                            SetKeyEntryDisabled(!(Engine.Scene is Overworld) || Connected);
+                        break;
                 }
             }
         }
@@ -1057,12 +1032,12 @@ namespace Celeste.Mod.CelesteNet.Client
                 // Don't show the error if we managed to connect, I guess :clueless:
                 switch (val)
                 {
-                case KeyErrors.InvalidChars:
-                    return "modoptions_celestenetclient_keyerror_invalidchars".DialogClean();
-                case KeyErrors.InvalidLength:
-                    return "modoptions_celestenetclient_keyerror_invalidlength".DialogClean();
-                case KeyErrors.InvalidKey:
-                    return "modoptions_celestenetclient_keyerror_invalidkey".DialogClean();
+                    case KeyErrors.InvalidChars:
+                        return "modoptions_celestenetclient_keyerror_invalidchars".DialogClean();
+                    case KeyErrors.InvalidLength:
+                        return "modoptions_celestenetclient_keyerror_invalidlength".DialogClean();
+                    case KeyErrors.InvalidKey:
+                        return "modoptions_celestenetclient_keyerror_invalidkey".DialogClean();
                 }
             }
 
@@ -1083,28 +1058,40 @@ namespace Celeste.Mod.CelesteNet.Client
             item.AddDescription(menu, "modoptions_celestenetclient_reloadhint".DialogClean());
         }
 
-        public void CreateExtraServersEntry(TextMenu menu, bool inGame)
+        public void CreateServerSelectEntry(TextMenu menu, bool inGame)
         {
             int selected = 0;
+
+            Func<int, string> mapName = value =>
+            {
+                string result = value switch
+                {
+                    0 => "modoptions_celestenetclient_serverselect_mainserver".DialogClean(),
+                    1 => "modoptions_celestenetclient_serverselect_backupserver".DialogClean(),
+                    _ => "Null"
+                };
+                return result;
+            };
+
             for (int i = 0; i < ExtraServers.Length; i++)
                 if (ExtraServers[i] == Server)
-                    selected = i + 1;
+                    selected = i + DefaultServer.Length;
 
-            ExtraServersEntry = CreateMenuSlider(
-                menu, "EXTRASERVERS_SLIDER",
-                0, ExtraServers.Length, selected,
-                i => i == 0 ? DefaultServer : ExtraServers[i - 1],
+            ServerSelectEntry = CreateMenuSlider(
+                menu, "SERVERSELECT_SLIDER",
+                0, ExtraServers.Length + DefaultServer.Length - 1, selected,
+                i => i < DefaultServer.Length ? mapName(i) : ExtraServers[i - DefaultServer.Length],
                 i =>
                 {
-                    if (!Connected && i <= ExtraServers.Length)
-                        Server = i == 0 ? DefaultServer : ExtraServers[i - 1];
+                    if (!Connected && i <= DefaultServer.Length + ExtraServers.Length)
+                        Server = i < DefaultServer.Length ? DefaultServer[i] : ExtraServers[i - DefaultServer.Length];
                 }
             );
 
-            ExtraServersEntry.Visible = ExtraServers.Length > 0;
-            ExtraServersEntry.Disabled = Connected;
+            ServerSelectEntry.Disabled = Connected;
+            ServerSelectEntry.Visible = true;
 
-            TextMenu.Button item = CreateMenuButton(menu, "EXTRASERVERS_RELOAD", null, () =>
+            TextMenu.Button item = CreateMenuButton(menu, "SERVERSELECT_RELOAD", null, () =>
             {
                 CelesteNetClientSettings settingsOld = CelesteNetClientModule.Settings;
                 CelesteNetClientModule.Instance.LoadSettings();
@@ -1112,21 +1099,65 @@ namespace Celeste.Mod.CelesteNet.Client
                 CelesteNetClientModule.Instance._Settings = settingsOld;
 
                 settingsOld.ExtraServers = settingsNew.ExtraServers;
+                
+                int old_idx = ServerSelectEntry.Index;
+                ServerSelectEntry.Index = 0;
+                ServerSelectEntry.Values.Clear();
 
-                int old_idx = ExtraServersEntry.Index;
-                ExtraServersEntry.Index = 0;
-                ExtraServersEntry.Values.Clear();
-
-                for (int i = 0; i <= ExtraServers.Length; i++)
-                    ExtraServersEntry.Add(i == 0 ? DefaultServer : ExtraServers[i - 1], i, i == old_idx);
-
-                ExtraServersEntry.Visible = ExtraServers.Length > 0;
+                for (int i = 0; i < ExtraServers.Length; i++)
+                    ServerSelectEntry.Add(i < DefaultServer.Length ? mapName(i) : ExtraServers[i - DefaultServer.Length], i, i == old_idx);
             });
             item.AddDescription(menu, "modoptions_celestenetclient_reloadhint".DialogClean());
 #if !DEBUG
             item.Visible = ExtraServers.Length > 0;
 #endif
         }
+
+
+        //         public void CreateExtraServersEntry(TextMenu menu, bool inGame)
+        //         {
+        //             int selected = 0;
+        //             for (int i = 0; i < ExtraServers.Length; i++)
+        //                 if (ExtraServers[i] == Server)
+        //                     selected = i + 1;
+
+        //             ExtraServersEntry = CreateMenuSlider(
+        //                 menu, "EXTRASERVERS_SLIDER",
+        //                 0, ExtraServers.Length, selected,
+        //                 i => i == 0 ? DefaultServer : ExtraServers[i - 1],
+        //                 i =>
+        //                 {
+        //                     if (!Connected && i <= ExtraServers.Length)
+        //                         Server = i == 0 ? DefaultServer : ExtraServers[i - 1];
+        //                 }
+        //             );
+
+        //             ExtraServersEntry.Visible = ExtraServers.Length > 0;
+        //             ExtraServersEntry.Disabled = Connected;
+
+        //             TextMenu.Button item = CreateMenuButton(menu, "EXTRASERVERS_RELOAD", null, () =>
+        //             {
+        //                 CelesteNetClientSettings settingsOld = CelesteNetClientModule.Settings;
+        //                 CelesteNetClientModule.Instance.LoadSettings();
+        //                 CelesteNetClientSettings settingsNew = CelesteNetClientModule.Settings;
+        //                 CelesteNetClientModule.Instance._Settings = settingsOld;
+
+        //                 settingsOld.ExtraServers = settingsNew.ExtraServers;
+
+        //                 int old_idx = ExtraServersEntry.Index;
+        //                 ExtraServersEntry.Index = 0;
+        //                 ExtraServersEntry.Values.Clear();
+
+        //                 for (int i = 0; i <= ExtraServers.Length; i++)
+        //                     ExtraServersEntry.Add(i == 0 ? DefaultServer : ExtraServers[i - 1], i, i == old_idx);
+
+        //                 ExtraServersEntry.Visible = ExtraServers.Length > 0;
+        //             });
+        //             item.AddDescription(menu, "modoptions_celestenetclient_reloadhint".DialogClean());
+        // #if !DEBUG
+        //             item.Visible = ExtraServers.Length > 0;
+        // #endif
+        //         }
 
         public void CreateUISizeChatEntry(TextMenu menu, bool inGame)
         {
@@ -1147,7 +1178,7 @@ namespace Celeste.Mod.CelesteNet.Client
             ResetGeneralButton = CreateMenuButton(menu, "RESETGENERAL", null, () =>
             {
                 SettingsVersionDoNotEdit = SettingsVersionCurrent;
-                Server = DefaultServer;
+                Server = DefaultServer[0];
                 // do this which is hopefully visually correct on the OnOff items...
                 AutoReconnectEntry?.RightPressed();
                 ReceivePlayerAvatarsEntry?.RightPressed();
@@ -1194,10 +1225,10 @@ namespace Celeste.Mod.CelesteNet.Client
 
         public void CreateConnectDefaultButtonEntry(TextMenu menu, bool inGame)
         {
-            ConnectDefaultButton = CreateMenuButton(menu, "CONNECTDEFAULT", (label) => label.Replace("((default))", DefaultServer), () =>
+            ConnectDefaultButton = CreateMenuButton(menu, "CONNECTDEFAULT", (label) => label.Replace("((default))", DefaultServer[0]), () =>
             {
                 ServerOverride = "";
-                Server = DefaultServer;
+                Server = DefaultServer[0];
                 CelesteNetClientModule.Instance.ResetReconnectPenalty();
                 Connected = true;
             });

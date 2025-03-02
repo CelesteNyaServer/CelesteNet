@@ -76,7 +76,7 @@ namespace Celeste.Mod.CelesteNet.Client
             private set {
                 _FailedReconnectCount = value;
 
-                if (value >= FailedReconnectThreshold && Settings.EffectiveServer != CelesteNetClientSettings.DefaultServer) {
+                if (value >= FailedReconnectThreshold && Settings.EffectiveServer != CelesteNetClientSettings.DefaultServer[0]) {
                     Settings.ConnectDefaultVisible = true;
                     Settings.WantsToBeConnected = false;
                 }
@@ -248,7 +248,7 @@ namespace Celeste.Mod.CelesteNet.Client
                 Logger.Log(LogLevel.INF, "LoadSettings", $"Settings Migration done, set Version to {Settings.Version}");
             }
 
-            Settings.Server = CelesteNetClientSettings.DefaultServer;
+            Settings.Server = CelesteNetClientSettings.DefaultServer[0];
 
             if (Settings.Emotes == null || Settings.Emotes.Length == 0)
             {
