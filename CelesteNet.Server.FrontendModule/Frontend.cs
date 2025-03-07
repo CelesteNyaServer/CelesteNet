@@ -256,23 +256,75 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
 
             ConPlusTCPUDPConnection? pCon = p.Con as ConPlusTCPUDPConnection;
 
-            if (!shorten && auth) {
-                player.TCPPingMs = pCon?.TCPPingMs;
-                player.UDPPingMs = pCon?.UDPPingMs;
-                player.TCPDownlinkBpS = pCon?.TCPRecvRate.ByteRate;
-                player.TCPDownlinkPpS = pCon?.TCPRecvRate.PacketRate;
-                player.TCPUplinkBpS = pCon?.TCPSendRate.ByteRate;
-                player.TCPUplinkPpS = pCon?.TCPSendRate.PacketRate;
-                player.UDPDownlinkBpS = pCon?.UDPRecvRate.ByteRate;
-                player.UDPDownlinkPpS = pCon?.UDPRecvRate.PacketRate;
-                player.UDPUplinkBpS = pCon?.UDPSendRate.ByteRate;
-                player.UDPUplinkPpS = pCon?.UDPSendRate.PacketRate;
+            if (!shorten && auth && pCon != null && pCon.IsAlive) {
+                try {
+                    // 安全地获取连接速率信息
+                    player.TCPPingMs = SafeGetProperty(() => pCon.TCPPingMs);
+                    player.UDPPingMs = SafeGetProperty(() => pCon.UDPPingMs);
+                    
+                    // 安全地获取TCP接收速率
+                    player.TCPDownlinkBpS = SafeGetProperty(() => pCon.TCPRecvRate?.ByteRate);
+                    player.TCPDownlinkPpS = SafeGetProperty(() => pCon.TCPRecvRate?.PacketRate);
+                    
+                    // 安全地获取TCP发送速率
+                    player.TCPUplinkBpS = SafeGetProperty(() => pCon.TCPSendRate?.ByteRate);
+                    player.TCPUplinkPpS = SafeGetProperty(() => pCon.TCPSendRate?.PacketRate);
+                    
+                    // 安全地获取UDP接收速率
+                    player.UDPDownlinkBpS = SafeGetProperty(() => pCon.UDPRecvRate?.ByteRate);
+                    player.UDPDownlinkPpS = SafeGetProperty(() => pCon.UDPRecvRate?.PacketRate);
+                    
+                    // 安全地获取UDP发送速率
+                    player.UDPUplinkBpS = SafeGetProperty(() => pCon.UDPSendRate?.ByteRate);
+                    player.UDPUplinkPpS = SafeGetProperty(() => pCon.UDPSendRate?.PacketRate);
+                } catch (Exception ex) {
+                    Logger.Log(LogLevel.WRN, "frontend", $"获取连接速率信息时出错: {ex.Message}");
+                }
             }
 
-            if (pCon?.GetAssociatedData<ExtendedHandshake.ConnectionData>() is ExtendedHandshake.ConnectionData conData && conData.CheckEntriesValid)
-                player.ExtHandshakeCheckValues = new Dictionary<string, string>(conData.CheckEntries);
+            try {
+                // 使用反射安全地获取ExtendedHandshake.ConnectionData
+                if (pCon != null && pCon.IsAlive) {
+                    var getAssociatedDataMethod = pCon.GetType().GetMethod("GetAssociatedData", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (getAssociatedDataMethod != null) {
+                        var connectionDataType = Type.GetType("Celeste.Mod.CelesteNet.ExtendedHandshake+ConnectionData, CelesteNet.Server");
+                        if (connectionDataType != null) {
+                            var conData = getAssociatedDataMethod.MakeGenericMethod(connectionDataType).Invoke(pCon, Array.Empty<object>());
+                            if (conData != null) {
+                                var checkEntriesProperty = connectionDataType.GetProperty("CheckEntries");
+                                var checkEntriesValidProperty = connectionDataType.GetProperty("CheckEntriesValid");
+                                if (checkEntriesProperty != null && checkEntriesValidProperty != null) {
+                                    bool checkEntriesValid = (bool)checkEntriesValidProperty.GetValue(conData);
+                                    if (checkEntriesValid) {
+                                        var checkEntries = checkEntriesProperty.GetValue(conData) as Dictionary<string, string>;
+                                        if (checkEntries != null) {
+                                            player.ExtHandshakeCheckValues = new Dictionary<string, string>(checkEntries);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                // 忽略任何反射错误，确保前端不会因此崩溃
+                Logger.Log(LogLevel.WRN, "frontend", $"获取ExtendedHandshake数据时出错: {ex.Message}");
+            }
 
             return player;
+        }
+
+        // 安全地获取属性值的辅助方法
+        private object? SafeGetProperty<T>(Func<T> getter)
+        {
+            try {
+                return getter();
+            } catch (ObjectDisposedException) {
+                return null;
+            } catch (Exception ex) {
+                Logger.Log(LogLevel.VVV, "frontend", $"获取属性时出错: {ex.Message}");
+                return null;
+            }
         }
 
         public object UserInfoToFrontend(string uid, BasicUserInfo info, BanInfo? ban = null, KickHistory? kicks = null, bool authExec = false) {

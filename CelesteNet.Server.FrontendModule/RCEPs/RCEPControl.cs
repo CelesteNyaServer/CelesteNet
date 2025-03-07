@@ -434,11 +434,24 @@ namespace Celeste.Mod.CelesteNet.Server.Control {
 
         [RCEndpoint(false, "/players", null, null, "Player List", "Basic player list.")]
         public static void Players(Frontend f, HttpRequestEventArgs c) {
-            object responseObj;
-            using (f.Server.ConLock.R()) {
-                responseObj = f.Server.PlayersByID.Values.Select(p => f.PlayerSessionToFrontend(p, true)).ToArray();
+            try {
+                object responseObj;
+                using (f.Server.ConLock.R()) {
+                    var players = new List<object>();
+                    foreach (var player in f.Server.PlayersByID.Values) {
+                        try {
+                            players.Add(f.PlayerSessionToFrontend(player, true));
+                        } catch (Exception ex) {
+                            Logger.Log(LogLevel.WRN, "frontend", $"处理玩家信息时出错: {ex.Message}");
+                        }
+                    }
+                    responseObj = players;
+                }
+                f.RespondJSON(c, responseObj);
+            } catch (Exception ex) {
+                Logger.Log(LogLevel.ERR, "frontend", $"获取玩家列表时出错: {ex}");
+                f.RespondJSON(c, new { error = "获取玩家列表时出错" });
             }
-            f.RespondJSON(c, responseObj);
         }
 
         [RCEndpoint(false, "/channels", null, null, "Channel List", "Basic channel list.")]

@@ -301,20 +301,54 @@ namespace Celeste.Mod.CelesteNet.Server {
         public void HandleDisconnect(CelesteNetConnection con) {
             Logger.Log(LogLevel.INF, "main", $"Disconnecting: {con}");
 
-            using (ConLock.W())
-                Connections.Remove(con);
-
-            PlayersByCon.TryGetValue(con, out CelesteNetPlayerSession? session);
-            if (session != null) {
-                using (ConLock.W()) {
-                    Sessions.Remove(session);
-                    PlayersByCon.TryRemove(con, out _);
-                    PlayersByID.TryRemove(session.SessionID, out _);
+            try {
+                // 使用超时机制获取写锁
+                bool lockAcquired = false;
+                try {
+                    lockAcquired = ConLock.Inner.TryEnterWriteLock(5000);
+                    if (lockAcquired) {
+                        Connections.Remove(con);
+                    } else {
+                        Logger.Log(LogLevel.WRN, "main", $"获取ConLock写锁超时，可能存在死锁风险: {con}");
+                    }
+                } finally {
+                    if (lockAcquired)
+                        ConLock.Inner.ExitWriteLock();
                 }
-                session?.Dispose();
-            }
 
-            OnDisconnect?.Invoke(this, con, session);
+                PlayersByCon.TryGetValue(con, out CelesteNetPlayerSession? session);
+                if (session != null) {
+                    try {
+                        lockAcquired = false;
+                        try {
+                            lockAcquired = ConLock.Inner.TryEnterWriteLock(5000);
+                            if (lockAcquired) {
+                                Sessions.Remove(session);
+                                PlayersByCon.TryRemove(con, out _);
+                                PlayersByID.TryRemove(session.SessionID, out _);
+                            } else {
+                                Logger.Log(LogLevel.WRN, "main", $"获取ConLock写锁超时，可能存在死锁风险: {con}");
+                            }
+                        } finally {
+                            if (lockAcquired)
+                                ConLock.Inner.ExitWriteLock();
+                        }
+                        
+                        // 安全地释放会话资源
+                        try {
+                            session?.Dispose();
+                        } catch (Exception e) {
+                            Logger.Log(LogLevel.ERR, "main", $"释放会话资源时发生错误: {e}");
+                        }
+                    } catch (Exception e) {
+                        Logger.Log(LogLevel.ERR, "main", $"处理会话断开连接时发生错误: {e}");
+                    }
+                }
+
+                OnDisconnect?.Invoke(this, con, session);
+            } catch (Exception e) {
+                Logger.Log(LogLevel.ERR, "main", $"处理断开连接时发生错误: {e}");
+            }
         }
 
         public event Action<CelesteNetPlayerSession>? OnSessionStart;
