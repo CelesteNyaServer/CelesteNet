@@ -506,25 +506,77 @@ namespace Celeste.Mod.CelesteNet.Server
             if (Interlocked.Exchange(ref _Alive, 0) <= 0)
                 return;
 
-            Logger.Log(LogLevel.INF, "playersession", $"Shutdown #{SessionID} {Con} (Session UID: {UID}; PlayerInfo: {PlayerInfo})");
+            try
+            {
+                Logger.Log(LogLevel.INF, "playersession", $"Shutdown #{SessionID} {Con} (Session UID: {UID}; PlayerInfo: {PlayerInfo})");
 
-            DataPlayerInfo? playerInfoLast = PlayerInfo;
+                DataPlayerInfo? playerInfoLast = PlayerInfo;
 
-            if (playerInfoLast != null)
-                Server.BroadcastAsync(new DataPlayerInfo
+                if (playerInfoLast != null)
                 {
-                    ID = SessionID
-                });
+                    try
+                    {
+                        Server.BroadcastAsync(new DataPlayerInfo
+                        {
+                            ID = SessionID
+                        });
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.Log(LogLevel.ERR, "playersession", $"广播玩家信息时发生错误: {e}");
+                    }
+                }
 
-            Con.OnSendFilter -= ConSendFilter;
-            Server.Data.UnregisterHandlersIn(this);
+                try
+                {
+                    Con.OnSendFilter -= ConSendFilter;
+                }
+                catch (Exception e)
+                {
+                    Logger.Log(LogLevel.ERR, "playersession", $"移除发送过滤器时发生错误: {e}");
+                }
 
-            Server.Data.FreeRef<DataPlayerInfo>(SessionID);
-            Server.Data.FreeOrder<DataPlayerFrame>(SessionID);
+                try
+                {
+                    Server.Data.UnregisterHandlersIn(this);
+                }
+                catch (Exception e)
+                {
+                    Logger.Log(LogLevel.ERR, "playersession", $"注销处理程序时发生错误: {e}");
+                }
 
-            OnEnd?.Invoke(this, playerInfoLast);
+                try
+                {
+                    Server.Data.FreeRef<DataPlayerInfo>(SessionID);
+                    Server.Data.FreeOrder<DataPlayerFrame>(SessionID);
+                }
+                catch (Exception e)
+                {
+                    Logger.Log(LogLevel.ERR, "playersession", $"释放数据引用时发生错误: {e}");
+                }
 
-            StateLock.Dispose();
+                try
+                {
+                    OnEnd?.Invoke(this, playerInfoLast);
+                }
+                catch (Exception e)
+                {
+                    Logger.Log(LogLevel.ERR, "playersession", $"调用OnEnd事件时发生错误: {e}");
+                }
+
+                try
+                {
+                    StateLock.Dispose();
+                }
+                catch (Exception e)
+                {
+                    Logger.Log(LogLevel.ERR, "playersession", $"释放StateLock时发生错误: {e}");
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Log(LogLevel.ERR, "playersession", $"Dispose过程中发生未处理的错误: {e}");
+            }
         }
 
 

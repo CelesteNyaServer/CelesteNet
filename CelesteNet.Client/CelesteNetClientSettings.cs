@@ -81,7 +81,7 @@ namespace Celeste.Mod.CelesteNet.Client
                 {
                     //ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
                     ServerSelectOption.MainServer => "celesteserver.centralteam.cn:17231",
-                    ServerSelectOption.BackupServer => "45.125.44.66:17230",
+                    ServerSelectOption.BackupServer => "203.135.99.5:17230",
                     _ => Server
                 };
 
