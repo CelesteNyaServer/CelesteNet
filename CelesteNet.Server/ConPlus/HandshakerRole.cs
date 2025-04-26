@@ -441,7 +441,7 @@ Who wants some tea?"
                 string json;
 
                 FileInfo fi = new(Path.Combine("temp", $"{nameKey}.json"));
-                if (fi.Exists && DateTime.UtcNow - fi.LastWriteTime < TimeSpan.FromMinutes(10))
+                if (fi.Exists && DateTime.UtcNow - fi.LastWriteTime < TimeSpan.FromMinutes(5))
                 {
                     Logger.Log(LogLevel.INF, "NetAuth", $"Using not outdated auth cache of {fi.Name}.");
                     json = File.ReadAllText(fi.FullName);
