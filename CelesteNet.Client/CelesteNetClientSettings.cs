@@ -80,8 +80,8 @@ namespace Celeste.Mod.CelesteNet.Client
                 Server = serverSelect switch
                 {
                     //ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
-                    ServerSelectOption.MainServer => "celesteserver.centralteam.cn:17231",
-                    ServerSelectOption.BackupServer => "203.135.99.5:17230",
+                    ServerSelectOption.MainServer => "main.server.celemiao.com:10048",
+                    ServerSelectOption.BackupServer => "back.server.celemiao.com:17231",
                     _ => Server
                 };
 
@@ -970,7 +970,7 @@ namespace Celeste.Mod.CelesteNet.Client
                 {
                     var psi = new ProcessStartInfo
                     {
-                        FileName = "https://celeste.centralteam.cn/oauth/authorize?client_id=FSygRsIuDy0edjcJzYuw2PpJL1TwkWa&response_type=code&redirect_uri=http://localhost:38038/auth&scope=celeste.read",
+                        FileName = "https://bbs.celemiao.com/oauth/authorize?client_id=FSygRsIuDy0edjcJzYuw2PpJL1TwkWa&response_type=code&redirect_uri=http://localhost:38038/auth&scope=celeste.read",
                         UseShellExecute = true
                     };
                     Process.Start(psi);

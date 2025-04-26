@@ -273,7 +273,7 @@ Connection: close
 
                 headers.TryGetValue("CelesteNet-ClientVersion", out string? clientVersion);
 
-                const string expectedVersion = "3.2.5";
+                const string expectedVersion = "3.2.6";
                 if (clientVersion != expectedVersion)
                 {
                     await writer.WriteAsync(
@@ -322,7 +322,7 @@ Connection: close
                     );
                     return null;
                 }
-                playerInfo!.AvatarPhotoUrl ??= "https://celeste.centralteam.cn/assets/uploads/profile/default.jpg";
+                playerInfo!.AvatarPhotoUrl ??= "https://bbs.celemiao.com/assets/uploads/profile/default.jpg";
 
                 // Parse the client options
                 CelesteNetClientOptions clientOptions = new();
@@ -448,11 +448,17 @@ Who wants some tea?"
                 }
                 else
                 {
-                    json = HttpUtils.Get($"https://celeste.centralteam.cn/api/celeste/user?access_token={key}");
+                    json = HttpUtils.Get($"https://bbs.celemiao.com/api/celeste/user?access_token={key}");
                 }
+               
                 NyaNetAuthResult? authResult = JsonSerializer.Deserialize<NyaNetAuthResult>(json);
                 if (authResult == null)
                     return (string.Format(Server.Settings.MessageInvalidKey, nameKey), null);
+
+                if (authResult.SuspendedUntil > DateTime.Now)
+                {
+                    return (string.Format("Your Account has been Banned Until {0}", authResult.SuspendedUntil),null);
+                }
 
                 Logger.Log(LogLevel.INF, "NetAuth", $"Auth result: {json}");
                 NyaNetPlayerInfo playerInfo = new(
@@ -462,6 +468,7 @@ Who wants some tea?"
                     authResult.AvatarUrl,
                     authResult.Prefix
                     );
+
                 if (authResult.IsEmailConfirmed != 0)
                 {
                     Directory.CreateDirectory("temp");
@@ -520,8 +527,16 @@ Who wants some tea?"
             [JsonPropertyName("color")]
             public string? Color { get; set; }
 
-            [JsonPropertyName("is_banned")]
-            public int IsBanned { get; set; }
+            [JsonPropertyName("suspended_until")]
+            public DateTime? SuspendedUntil { get; set; }
+
+
+            [JsonPropertyName("suspend_message")]
+            public DateTime? SuspendMessage { get; set; }
+
+
+            [JsonPropertyName("suspend_reason")]
+            public DateTime? SuspendReason { get; set; }
         }
     }
 }
