@@ -307,7 +307,7 @@ Connection: close
 
                 // Authenticate name-key
                 (string? errorReason, NyaNetPlayerInfo? playerInfo) =
-                    AuthenticatePlayerNameKey(playerNameKey, conUID);
+                    await AuthenticatePlayerNameKey(playerNameKey, conUID);
                 if (playerInfo is null)
                     errorReason = "Please login first";
                 if (errorReason != null)
@@ -431,7 +431,7 @@ Who wants some tea?"
             });
         }
 
-        public (string?, NyaNetPlayerInfo?) AuthenticatePlayerNameKey(string nameKey, string conUID)
+        public async Task<(string?, NyaNetPlayerInfo?)> AuthenticatePlayerNameKey(string nameKey, string conUID)
         {
             // Get the player UID and name from the player name-key
             if (nameKey.Length > 1 && nameKey.StartsWith("#"))
@@ -444,11 +444,11 @@ Who wants some tea?"
                 if (fi.Exists && DateTime.UtcNow - fi.LastWriteTime < TimeSpan.FromMinutes(5))
                 {
                     Logger.Log(LogLevel.INF, "NetAuth", $"Using not outdated auth cache of {fi.Name}.");
-                    json = File.ReadAllText(fi.FullName);
+                    json = await File.ReadAllTextAsync(fi.FullName);
                 }
                 else
                 {
-                    json = HttpUtils.Get($"https://bbs.celemiao.com/api/celeste/user?access_token={key}");
+                    json = await HttpUtils.GetAsync($"https://bbs.celemiao.com/api/celeste/user?access_token={key}");
                 }
                
                 NyaNetAuthResult? authResult = JsonSerializer.Deserialize<NyaNetAuthResult>(json);
@@ -472,7 +472,7 @@ Who wants some tea?"
                 if (authResult.IsEmailConfirmed != 0)
                 {
                     Directory.CreateDirectory("temp");
-                    File.WriteAllText(fi.FullName, json);
+                    await File.WriteAllTextAsync(fi.FullName, json);
                     Logger.Log(LogLevel.INF, "NetAuth", $"Auth cache for {nameKey}.");
                 }
                 return (null, playerInfo);

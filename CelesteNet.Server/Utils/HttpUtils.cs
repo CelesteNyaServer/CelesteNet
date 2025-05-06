@@ -41,6 +41,13 @@ internal static class HttpUtils
         return res.Content.ReadAsStringAsync().Result;
     }
 
+    public static async Task<string> GetAsync(string url)
+    {
+        HttpRequestMessage reqMsg = new(HttpMethod.Get, url);
+        var res = await httpClient.SendAsync(reqMsg);
+        return await res.Content.ReadAsStringAsync();
+    }
+
     public static string GetImage(string url, string fileName)
     {
         Directory.CreateDirectory("temp");
