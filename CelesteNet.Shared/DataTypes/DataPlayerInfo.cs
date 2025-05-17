@@ -13,6 +13,7 @@ namespace Celeste.Mod.CelesteNet.DataTypes
         public string Name = ""; // 论坛名
         public string FullName = ""; // 带名称冲突后缀名 (可能在单客户端多连接时发生)
         public string AvatarID = ""; // 头像 emote ID
+        public string AvatarURL = ""; // 头像 URL
         public string Prefix = ""; // 头衔
         public Color NameColor = Color.White;
 
@@ -33,6 +34,7 @@ namespace Celeste.Mod.CelesteNet.DataTypes
             Name = reader.ReadNetString();
             FullName = reader.ReadNetString();
             AvatarID = reader.ReadNetString();
+            AvatarURL = reader.ReadNetString();
             Prefix = reader.ReadNetString();
             NameColor = reader.ReadColorNoA();
         }
@@ -41,6 +43,7 @@ namespace Celeste.Mod.CelesteNet.DataTypes
             writer.WriteNetString(Name);
             writer.WriteNetString(FullName);
             writer.WriteNetString(AvatarID);
+            writer.WriteNetString(AvatarURL);
             writer.WriteNetString(Prefix);
             writer.WriteNoA(NameColor);
         }

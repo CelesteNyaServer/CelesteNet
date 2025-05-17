@@ -119,7 +119,7 @@ namespace Celeste.Mod.CelesteNet.Server {
                     if (++ThreadRestarts[thread.Index] < MaxThreadsRestart) {
                             Logger.Log(LogLevel.DBG, "netplus", $"Restarting thread pool thread {thread.Index}");
                             Threads[thread.Index] = new(this, thread.Index, thread.Role);
-                    } else throw new InvalidOperationException($"Too many restarts for thread pool thread {thread.Index}", ex);
+                    } //else throw new InvalidOperationException($"Too many restarts for thread pool thread {thread.Index}", ex);
                 }
             }
         }

@@ -80,7 +80,7 @@ namespace Celeste.Mod.CelesteNet.Client
                 Server = serverSelect switch
                 {
                     //ServerSelectOption.AutoSelect => "celesteserver.centralteam.cn:17230",
-                    ServerSelectOption.MainServer => "main.server.celemiao.com:10048",
+                    ServerSelectOption.MainServer => "main.server.celemiao.com:17231",
                     ServerSelectOption.BackupServer => "back.server.celemiao.com:17231",
                     _ => Server
                 };

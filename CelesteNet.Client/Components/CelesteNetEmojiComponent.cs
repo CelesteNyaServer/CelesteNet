@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using Celeste.Mod.CelesteNet.DataTypes;
+using Celeste.Mod.CelesteNet.Client.Utils;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Monocle;
@@ -92,11 +93,14 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
         public NetEmojiContent Content = new();
         private readonly Dictionary<string, NetEmojiAsset> Pending = new();
 
+        private AvatarManager AvatarMgr;
+
         public CelesteNetEmojiComponent(CelesteNetClientContext context, Game game)
             : base(context, game) {
 
             UpdateOrder = 10000;
             Visible = false;
+            AvatarMgr = new AvatarManager(context);
         }
 
         public void Handle(CelesteNetConnection con, DataNetEmoji netemoji) {
@@ -154,8 +158,15 @@ namespace Celeste.Mod.CelesteNet.Client.Components {
             // catch missing avatars - "restoring" these happens in Handle above when the avatar is fully received
             string avatar = $"celestenet_avatar_{info.ID}_";
             if (!Emoji.Registered.Contains(avatar)) {
-                    info.DisplayName = info.DisplayName.Replace($":{avatar}:", AvatarMissing);
+                info.DisplayName = info.DisplayName.Replace($":{avatar}:", AvatarMissing);
                 info.UpdateDisplayName(true);
+                
+                // 使用 AvatarManager 下载并注册头像
+                if (!string.IsNullOrEmpty(info.AvatarURL)) {
+                    MainThreadHelper.Schedule(async () => {
+                        await AvatarMgr.DownloadAndRegisterAvatarAsync(info, info.AvatarURL);
+                    });
+                }
             }
             return true;
         }

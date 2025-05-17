@@ -231,60 +231,9 @@ namespace Celeste.Mod.CelesteNet.Server
             }
 
             // Handle avatars (+ carb day)
-            string img;
-            if (DateTime.Now is { Day: 1, Month: 4 } && File.Exists("crab.png"))
-            {
-                img = "carb.png";
-            }
-            else
-            {
-                string fileName = Path.Combine("temp", $"{fullName}.png");
-                FileInfo fi = new(fileName);
-                if (fi.Exists && DateTime.UtcNow - fi.LastWriteTimeUtc < TimeSpan.FromDays(1))
-                {
-                    Logger.Log(LogLevel.INF, "Avatar", $"Using not outdated cache {fileName}.");
-                    img = fileName;
-                }
-                else
-                {
-                    img = HttpUtils.GetImage(avaterPhotoUrl, fullName);
-                }
-
-            }
-            // TODO 官服这里用的是 Server.UserData.ReadFile(UID, "avatar.png")
-            // 这里每次玩家加入都要重发头像请求, 而且缩放在客户端(相对于论坛)侧做, 可以优化这部分流量
-            // 是否可以通过缓存 + 附带版本优化?
             string avatarId = $"celestenet_avatar_{SessionID}_";
-            using (Stream? avatarStream = File.OpenRead(img))
-            {
-                if (avatarStream != null)
-                {
-
-                    // Split the avatar into fragments
-                    List<DataNetEmoji> avatarFrags = new();
-                    byte[] buf = new byte[Server.Settings.MaxPacketSize / 2];
-                    int fragSize, seqNum = 0;
-                    while ((fragSize = avatarStream.Read(buf, 0, buf.Length)) > 0)
-                    {
-                        byte[] frag = new byte[fragSize];
-                        Buffer.BlockCopy(buf, 0, frag, 0, fragSize);
-                        if (avatarFrags.Count > 0)
-                            avatarFrags[avatarFrags.Count - 1].MoreFragments = true;
-                        avatarFrags.Add(new DataNetEmoji
-                        {
-                            ID = avatarId,
-                            Data = frag,
-                            SequenceNumber = seqNum++,
-                            MoreFragments = false
-                        });
-                    }
-
-                    // Turn avatar fragments into blobs
-                    AvatarFragments = avatarFrags.Select(frag => DataInternalBlob.For(Server.Data, frag)).ToArray();
-                }
-                else
-                    AvatarFragments = Dummy<DataInternalBlob>.EmptyArray;
-            }
+            // 不再读取头像文件，只设置 URL
+            
             // Create the player's PlayerInfo
             DataPlayerInfo playerInfo = new()
             {
@@ -292,6 +241,7 @@ namespace Celeste.Mod.CelesteNet.Server
                 Name = Name,
                 FullName = fullName,
                 AvatarID = avatarId,
+                AvatarURL = avaterPhotoUrl, // 设置头像URL
                 Prefix = playerPrefix,
                 NameColor = Calc.HexToColor(playerColor)
             };
@@ -308,14 +258,8 @@ namespace Celeste.Mod.CelesteNet.Server
             Con.Send(playerInfo);
             Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} - Sent own PlayerInfo");
 
-            if (!ClientOptions.AvatarsDisabled)
-                foreach (DataInternalBlob fragBlob in AvatarFragments)
-                    Con.Send(fragBlob);
-            Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} - Sent own Avatar frags");
-
-            int blobSendsNew = 0, avaSendsNew = 0;
-            int blobSendsOut = 0, avaSendsOut = 0;
-            int boundSends = 0;
+            int blobSendsNew = 0, boundSends = 0;
+            int blobSendsOut = 0;
             using (Server.ConLock.R())
                 foreach (CelesteNetPlayerSession other in Server.Sessions)
                 {
@@ -329,23 +273,11 @@ namespace Celeste.Mod.CelesteNet.Server
                     other.Con.Send(blobPlayerInfo);
                     blobSendsOut++;
 
-                    if (!other.ClientOptions.AvatarsDisabled)
-                    {
-                        foreach (DataInternalBlob fragBlob in AvatarFragments)
-                        {
-                            other.Con.Send(fragBlob);
-                            avaSendsOut++;
-                        }
-                    }
-
                     Con.Send(otherInfo);
                     blobSendsNew++;
-
-                    if (!ClientOptions.AvatarsDisabled)
-                        AvatarSendQueue.Add(other);
                 }
 
-            Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} - Done using ConLock -- blobSendsNew/avaSendsNew {blobSendsNew}/{avaSendsNew} - blobSendsOut/avaSendsOut {blobSendsOut}/{avaSendsOut} - boundSends {boundSends}");
+            Logger.Log(LogLevel.VVV, "playersession", $"Session #{SessionID} - Done using ConLock -- blobSendsNew {blobSendsNew} - blobSendsOut {blobSendsOut} - boundSends {boundSends}");
 
             if (!Server.Channels.SessionStartupMove(this))
                 ResendPlayerStates();
