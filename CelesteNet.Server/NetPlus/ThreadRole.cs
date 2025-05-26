@@ -15,7 +15,7 @@ namespace Celeste.Mod.CelesteNet.Server
     public abstract class NetPlusThreadRole : IDisposable {
 
         public abstract class RoleWorker : IDisposable {
-            private readonly RWLock ActivityLock;
+            private readonly ReaderWriterLockSlim ActivityLock;
             internal int ActiveZoneCounter = 0;
             private long LastActivityUpdate = long.MinValue;
             private float LastActivityRate = 0f;
@@ -24,31 +24,55 @@ namespace Celeste.Mod.CelesteNet.Server
                 Role = role;
                 Thread = thread;
 
-                // Init heuristic stuff
-                ActivityLock = new();
+                // 使用ReaderWriterLockSlim替代RWLock
+                ActivityLock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
 
-                using (Role.WorkerLock.W())
+                // 使用try-finally确保锁的释放
+                try {
+                    role.WorkerLock.Inner.EnterWriteLock();
                     role.Workers.Add(this);
+                } finally {
+                    if (role.WorkerLock.Inner.IsWriteLockHeld) {
+                        role.WorkerLock.Inner.ExitWriteLock();
+                    }
+                }
             }
 
             public virtual void Dispose() {
-                using (Role.WorkerLock.W())
+                try {
+                    Role.WorkerLock.Inner.EnterWriteLock();
                     Role.Workers.Remove(this);
-                ActivityLock.Dispose();
+                } finally {
+                    if (Role.WorkerLock.Inner.IsWriteLockHeld) {
+                        Role.WorkerLock.Inner.ExitWriteLock();
+                    }
+                    ActivityLock.Dispose();
+                }
             }
 
             protected internal abstract void StartWorker(CancellationToken token);
 
             protected void EnterActiveZone() {
-                using (ActivityLock.W())
+                try {
+                    ActivityLock.EnterWriteLock();
                     Thread.Pool.IterateSteadyHeuristic(ref LastActivityRate, ref LastActivityUpdate, (ActiveZoneCounter++ > 0) ? 1f : 0f, true);
+                } finally {
+                    if (ActivityLock.IsWriteLockHeld) {
+                        ActivityLock.ExitWriteLock();
+                    }
+                }
             }
 
             protected void ExitActiveZone() {
-                using (ActivityLock.W()) {
+                try {
+                    ActivityLock.EnterWriteLock();
                     if (ActiveZoneCounter <= 0)
                         throw new InvalidOperationException("Not in an active zone");
                     Thread.Pool.IterateSteadyHeuristic(ref LastActivityRate, ref LastActivityUpdate, (ActiveZoneCounter-- > 0) ? 1f : 0f, true);
+                } finally {
+                    if (ActivityLock.IsWriteLockHeld) {
+                        ActivityLock.ExitWriteLock();
+                    }
                 }
             }
 
@@ -57,8 +81,14 @@ namespace Celeste.Mod.CelesteNet.Server
 
             public float ActivityRate {
                 get {
-                    using (ActivityLock.R())
+                    try {
+                        ActivityLock.EnterReadLock();
                         return Thread.Pool.IterateSteadyHeuristic(ref LastActivityRate, ref LastActivityUpdate, (ActiveZoneCounter > 0) ? 1f : 0f);
+                    } finally {
+                        if (ActivityLock.IsReadLockHeld) {
+                            ActivityLock.ExitReadLock();
+                        }
+                    }
                 }
             }
         }
